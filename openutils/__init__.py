@@ -7,8 +7,6 @@
 # under the terms of version 2.1 of the GNU Lesser General Public License
 # as published by the Free Software Foundation.
 #
-
-
 """A  library of utils for reading and processing whole-slide images.
 """
 from .version import __version__
@@ -16,3 +14,4 @@ from .version import __version__
 from .normalize_staining import normalize_staining
 from .slideset import Slideset
 from .image_utli import *
+from .torch_util import *
