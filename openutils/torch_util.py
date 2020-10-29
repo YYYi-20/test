@@ -1,8 +1,8 @@
 import torch.nn as nn
 
 
-def weights_init(model, method=nn.init.xavier_normal_):
-    """Weights init for pytorch model or torch.nn.Sequential object.
+def weights_init(model, method='xavier'):
+    """Weights init inplace for pytorch model or torch.nn.Sequential object. default is xavier init.
 
     Args:
         model ([type]): [description]
@@ -11,13 +11,22 @@ def weights_init(model, method=nn.init.xavier_normal_):
     Returns:
         model: initialized model
     """
+    if method == 'xavier':
+        init_fun = nn.init.xavier_normal_
+    elif method == 'kaiming':
+        init_fun = nn.init.kaiming_normal_
+    else:
+        print('no init is applied')
+        return
+
     def fun(m):
         if isinstance(m, (nn.Conv2d, nn.Linear)):
-            method(m.weight)
-            nn.init.constant_(m.bias, 0.0)
+            init_fun(m.weight)
+            if not m.bias is None:
+                nn.init.constant_(m.bias, 0.0)
         elif isinstance(m, nn.BatchNorm2d):
             nn.init.constant_(m.weight, 1)
-            nn.init.constant_(m.bias, 0)
+            if not m.bias is None:
+                nn.init.constant_(m.bias, 0)
 
     model.apply(fun)
-    return model
