@@ -11,7 +11,7 @@
 """
 from .version import __version__
 
-from .normalize_staining import normalize_staining
-from .slideset import Slideset
+from .normalize_staining import *
+from .wsi_utils import *
 from .image_utli import *
 from .torch_util import *

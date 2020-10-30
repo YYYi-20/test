@@ -3,6 +3,7 @@ This is a Dataset generator for slide images.
 '''
 import logging
 import os
+import sys
 
 import numpy as np
 import openslide
@@ -13,13 +14,12 @@ from .image_utli import *
 from .normalize_staining import normalize_staining
 
 
-class Slideset(Dataset):
+class WsiDataSet(Dataset):
     """Create a datset generator or iterator for whole slide image
 
     Args:
         Dataset ([type]): [description]
     """
-
     def __init__(self, slide, tile_size=256, overlap=0, limit_bounds=True):
         """Create a slide dataset oeject and get tiles in 0.5um. same parameters
          as deepzoom.
