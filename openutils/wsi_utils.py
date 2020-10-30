@@ -20,7 +20,12 @@ class WsiDataSet(Dataset):
     Args:
         Dataset ([type]): [description]
     """
-    def __init__(self, slide, tile_size=256, overlap=0, limit_bounds=True):
+    def __init__(self,
+                 slide,
+                 tile_size=256,
+                 overlap=0,
+                 limit_bounds=True,
+                resolution=0.5,):
         """Create a slide dataset oeject and get tiles in 0.5um. same parameters
          as deepzoom.
 
@@ -34,16 +39,18 @@ class WsiDataSet(Dataset):
         self.tile_size = tile_size
         self.overlap = overlap
         self.limit_bounds = limit_bounds
+        self.resolution = resolution
         self._preprocess()
 
     def _preprocess(self):
         self.mpp_x = eval(
             self.slide.properties.get(openslide.PROPERTY_NAME_MPP_X))
         mpps = np.asarray([1, 2, 3, 4, 5]) * self.mpp_x
-        self.level = np.abs(np.subtract(mpps, 0.5)).argmin()
+        self.level = np.abs(np.subtract(mpps, self.resolution)).argmin()
         if not self.level == 1:
             logging.warn(
-                f'mpp = {self.mpp_x}, so we use level {self.level} in 0.5um')
+                f'mpp={self.mpp_x}, so we use L{self.level} in {self.resolution}um'
+            )
 
         self.data_gen = deepzoom.DeepZoomGenerator(self.slide, self.tile_size,
                                                    self.overlap,
@@ -64,19 +71,14 @@ class WsiDataSet(Dataset):
         tile = self.data_gen.get_tile(self.dz_level, (w, h))
         return tile
 
-    def save_tiles(self, save_dir, bw_thres=230, bw_ratio=0.5):
+    def save_tiles(self, out_dir, bw_thres=230, bw_ratio=0.5):
         self.bw_thres = bw_thres
         self.bw_ratio = bw_ratio
-        out_dir = os.path.join(save_dir, 'um5')
-        if os.path.exists(out_dir):
-            if len(os.listdir(out_dir)) != 0:
-                logging.error(f'files already in directory {save_dir}/um5/')
-                return
-
         os.makedirs(out_dir, exist_ok=True)
         for w, h in zip(self.W, self.H):
             tile = self.data_gen.get_tile(self.dz_level, (w, h))
             if not tile.size == (self.tile_size, self.tile_size):
+                # drop bounded tiles
                 continue
 
             gray = pil_to_np(tile.convert('L'))
@@ -89,4 +91,4 @@ class WsiDataSet(Dataset):
                 except:
                     pass
                 #     logging.error(f'normal error in tile w,h=({w},{h})')
-        logging.info(f'finished tiling and normalizing to -> {save_dir}')
+        logging.info(f'finished tiling and normalizing to -> {out_dir}')

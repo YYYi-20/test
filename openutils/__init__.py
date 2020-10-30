@@ -11,7 +11,7 @@
 """
 from .version import __version__
 
-from .normalize_staining import *
-from .wsi_utils import *
-from .image_utli import *
-from .torch_util import *
+from .normalize_staining import normalize_staining
+from .wsi_utils import WsiDataSet
+from .image_utli import np_to_pil, pil_to_np
+from .torch_util import weights_init
