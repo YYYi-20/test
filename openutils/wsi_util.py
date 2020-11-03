@@ -20,12 +20,14 @@ class WsiDataSet(Dataset):
     Args:
         Dataset ([type]): [description]
     """
-    def __init__(self,
-                 slide,
-                 tile_size=256,
-                 overlap=0,
-                 limit_bounds=True,
-                resolution=0.5,):
+    def __init__(
+        self,
+        slide,
+        tile_size=256,
+        overlap=0,
+        limit_bounds=True,
+        resolution=0.5,
+    ):
         """Create a slide dataset oeject and get tiles in 0.5um. same parameters
          as deepzoom.
 
