@@ -1,4 +1,5 @@
 import torch.nn as nn
+from torch.utils.data import Dataset
 
 
 def weights_init(model, method='xavier'):
@@ -30,3 +31,34 @@ def weights_init(model, method='xavier'):
                 nn.init.constant_(m.bias, 0)
 
     model.apply(fun)
+
+
+class TensorDataset(Dataset):
+    """[summary]
+
+    Args:
+        Dataset ([type]): [description]
+    """
+    def __init__(self, X, y=None, transforms=None):
+        """[summary]
+
+        Args:
+            X ([type]): [description]
+            y ([type], optional): [description]. Defaults to None.
+            transforms ([type], optional): [description]. Defaults to None.
+        """
+        self.X = X
+        self.transforms = transforms
+        self.y = y
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, index):
+        sample = self.X[index]
+        if self.transforms:
+            sample = self.transforms(sample)
+        if self.y is not None:
+            return sample, self.y[index]
+        else:
+            return sample
