@@ -9,18 +9,15 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
-
 # This will add __version__ to version dict
 version = {}
-with open(path.join(here, 'openutils/version.py'), encoding='utf-8') as (
-        version_file):
+with open(path.join(here, 'openutils/version.py'),
+          encoding='utf-8') as (version_file):
     exec(version_file.read(), version)
 
 setup(
     name='openutils',
-
     version=version['__version__'],
-
     description='A python toolbox to process whole slide image.',
     long_description=long_description,
 
@@ -33,12 +30,11 @@ setup(
 
     # Choose your license
     license='BSD 3-Clause',
-
-    install_requires=['openslide-python', 'Pillow', 'numpy', 'pandas',
-                      'scipy', 'matplotlib', 'h5py', 'torch'],
+    install_requires=[
+        'openslide-python', 'Pillow', 'numpy', 'pandas', 'scipy', 'matplotlib',
+        'h5py', 'torch'
+    ],
     #tests_require = [...]
-
-
     classifiers=[
         'Development Status :: 3 - Alpha',
 
@@ -46,7 +42,6 @@ setup(
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
         'Topic :: Software Development :: Build Tools',
-
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
 
         # Pick your license as you wish (should match "license" above)
@@ -59,7 +54,6 @@ setup(
 
     # What does your project relate to?
     keywords='open ultils for wsi',
-
     packages=find_packages(),
     include_package_data=False,
     zip_safe=False,
