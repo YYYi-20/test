@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import os
 from imageio import imread, imsave
 import cv2
+from pathlib import Path
 
 
 def pil_to_np(pil_img):
@@ -72,19 +73,17 @@ def map_zoom(array, x=50, y=50):
     return np.concatenate(row, axis=0)
 
 
-def classmap_to_img(
-    cls_map,
-    labels,
-    names,
-    colors,
-    bar_size=3,
-    save_path=None,
-    resolution=20,
-    split=True,
-    show=False,
-    font_szie=1.5,
-    font_thick=4,
-):
+def classmap_to_img(cls_map,
+                    labels,
+                    names,
+                    colors,
+                    save_path=None,
+                    split=True,
+                    bar_size=3,
+                    resolution=20,
+                    font_szie=1.5,
+                    font_thick=3,
+                    show=False):
     """plot or save the class_map into ima files.
 
     Args:
@@ -145,8 +144,8 @@ def classmap_to_img(
     if show:
         pltshow(all_image)
     if save_path is not None:
+        os.makedirs(save_path, exist_ok=True)
         if split:
             for i in range(len(split_images)):
-                imsave(os.path.join(save_path, f'{names[i]}.jpeg'),
-                       split_images[i])
-        imsave(os.path.join(save_path, 'ALL.jpeg'), all_image)
+                imsave(Path(save_path, f'{names[i]}.jpeg'), split_images[i])
+        imsave(Path(save_path, 'ALL.jpeg'), all_image)
