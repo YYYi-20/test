@@ -149,3 +149,20 @@ def classmap_to_img(cls_map,
             for i in range(len(split_images)):
                 imsave(Path(save_path, f'{names[i]}.jpeg'), split_images[i])
         imsave(Path(save_path, 'ALL.jpeg'), all_image)
+
+
+def color_transform(value):
+    digit = "0123456789ABCDEF"
+    if isinstance(value, tuple):
+        string = '#'
+        for i in value:
+            a1 = i // 16
+            a2 = i % 16
+            string += digit[a1] + digit[a2]
+        return string
+
+    elif isinstance(value, str):
+        a1 = digit.index(value[1]) * 16 + digit.index(value[2])
+        a2 = digit.index(value[3]) * 16 + digit.index(value[4])
+        a3 = digit.index(value[5]) * 16 + digit.index(value[6])
+        return (a1, a2, a3)

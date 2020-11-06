@@ -84,12 +84,10 @@ class data_prefetcher():
         with torch.cuda.stream(self.stream):
             self.next_input = self.next_input.cuda(non_blocking=True)
             self.next_target = self.next_target.cuda(non_blocking=True)
-            # With Amp, it isn't necessary to manually convert data to half.
-            # if args.fp16:
-            #     self.next_input = self.next_input.half()
-            # else:
             self.next_input = self.next_input.float()
-            self.next_input = self.next_input.sub_(self.mean).div_(self.std)
+            if self.mean is not None and self.std is not None:
+                self.next_input = self.next_input.sub_(self.mean).div_(
+                    self.std)
 
     def next(self):
         torch.cuda.current_stream().wait_stream(self.stream)
