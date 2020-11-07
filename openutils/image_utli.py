@@ -1,6 +1,11 @@
 '''
-utils for PIL image and numpy array.
+Descripttion: python project
+version: 0.1
+Author: XRZHANG
+LastEditors: XRZHANG
+LastEditTime: 2020-11-07 15:44:05
 '''
+
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -8,6 +13,7 @@ import os
 from imageio import imread, imsave
 import cv2
 from pathlib import Path
+import logging
 
 
 def pil_to_np(pil_img):
@@ -84,16 +90,16 @@ def classmap_to_img(cls_map,
                     font_szie=1.5,
                     font_thick=3,
                     show=False):
-    """plot or save the class_map into ima files.
+    """plot or save the class_map into image files name.jpeg.
 
     Args:
-        cls_map ([type]): 2d-array
-        labels ([type]): list with int elemetns that represent predicted labels of the model in the 2-d array.
-        names ([type]): corresponding names of the labels.
-        colors ([type]): corresponding colors of the labels. e.g. colors = [(70, 130, 180), (0, 0, 0), (114, 64, 70),
+        cls_map (ndarray): 2d-array.
+        labels (list): the value in the classmap which we want to plot. For the value not in labels list, we will plot white. !!!!!Donot use 0 in labels, as we defaulty set tiles with value 0 to white color.
+        names (list): corresponding names of the labels.
+        colors (list): corresponding colors of the labels. e.g. colors = [(70, 130, 180), (0, 0, 0), (114, 64, 70),
         (195, 100, 197), (252, 108, 133), (205, 92, 92), (255, 163, 67)]
-        save_path ([type], optional): [description]. Defaults to None.
-        resolution (int, optional): [description]. Defaults to 50. if the class map is too small, use this to expand the size of the map.
+        save_path (str, optional): [description]. Defaults to None.
+        resolution (int, optional): Defaults to 50. if the class map is too small, use this to expand the size of the map.
         split (bool, optional): [description]. Defaults to True. if True, we save each class into one iamges additionally.
         show (bool, optional): [description]. Defaults to False. if True, preview the img.
         font_szie (float, optional): font_szie of bar
@@ -101,30 +107,35 @@ def classmap_to_img(cls_map,
     assert len(labels) == len(names) and len(labels) == len(colors)
     h, w = cls_map.shape
     if not bar_size == 0:
-        assert h > len(names)
-        padding = map_zoom(
-            np.asarray(labels).reshape(-1, 1), bar_size, bar_size)
-        H = (np.linspace(0, padding.shape[0], len(names), endpoint=False) +
-             bar_size) * resolution
-        W = np.repeat(padding.shape[1], len(names)) * resolution
-        positions = list(zip(W.astype('int64'), H.astype('int64')))
-        padding_bottom = np.zeros(shape=(h - padding.shape[0],
-                                         padding.shape[1]))
-        padding = np.r_[padding, padding_bottom]
-        padding = np.c_[padding, np.zeros(shape=(h, 9))]
-        padding = map_zoom(padding, resolution, resolution)
+        try:
+            assert h > len(names)
+            padding = map_zoom(
+                np.asarray(labels).reshape(-1, 1), bar_size, bar_size)
+            H = (np.linspace(0, padding.shape[0], len(names), endpoint=False) +
+                 bar_size) * resolution
+            W = np.repeat(padding.shape[1], len(names)) * resolution
+            positions = list(zip(W.astype('int64'), H.astype('int64')))
+            padding_bottom = np.zeros(shape=(h - padding.shape[0],
+                                             padding.shape[1]))
+            padding = np.r_[padding, padding_bottom]
+            padding = np.c_[padding, np.zeros(shape=(h, 9))]
+            padding = map_zoom(padding, resolution, resolution)
 
-        padding_image = np.ones(
-            (padding.shape[0], padding.shape[1], 3), dtype='uint8') * 255
-        for i, label_ in enumerate(labels):
-            X, Y = np.where(padding == label_)
-            padding_image[X, Y] = colors[i]
+            padding_image = np.ones(
+                (padding.shape[0], padding.shape[1], 3), dtype='uint8') * 255
+            for i, label_ in enumerate(labels):
+                X, Y = np.where(padding == label_)
+                padding_image[X, Y] = colors[i]
 
-        for i in range(len(names)):
-            cv2.putText(padding_image, names[i], positions[i],
-                        cv2.FONT_HERSHEY_SIMPLEX, font_szie, (0, 0, 0),
-                        font_thick, cv2.LINE_AA)
-            #图片，添加的文字，左上角坐标，字体，字体大小，颜色，字体粗细
+            for i in range(len(names)):
+                cv2.putText(padding_image, names[i], positions[i],
+                            cv2.FONT_HERSHEY_SIMPLEX, font_szie, (0, 0, 0),
+                            font_thick, cv2.LINE_AA)
+                #图片，添加的文字，左上角坐标，字体，字体大小，颜色，字体粗细
+        except:
+            bar_size = 0
+            logging.info('pleaser check the bar plot code')
+            # if rasie error in try, we set bar_size=0
 
     cls_map = map_zoom(cls_map, resolution, resolution)
     h, w = cls_map.shape
@@ -135,7 +146,7 @@ def classmap_to_img(cls_map,
         all_image[X, Y] = colors[i]
         split_images[i][X, Y] = colors[i]
 
-    if not bar_size == 0:
+    if bar_size is not 0:
         all_image = np.concatenate([all_image, padding_image], axis=1)
         for i in range(len(split_images)):
             split_images[i] = np.concatenate([split_images[i], padding_image],
@@ -152,6 +163,14 @@ def classmap_to_img(cls_map,
 
 
 def color_transform(value):
+    """Convert hex string color to dec tuple color
+
+    Args:
+        value (string ot tuple): color
+
+    Returns:
+        string or tuple: transformed color
+    """
     digit = "0123456789ABCDEF"
     if isinstance(value, tuple):
         string = '#'
@@ -166,3 +185,26 @@ def color_transform(value):
         a2 = digit.index(value[3]) * 16 + digit.index(value[4])
         a3 = digit.index(value[5]) * 16 + digit.index(value[6])
         return (a1, a2, a3)
+
+
+colormap_dec = {
+    'ADI': (114, 64, 70),
+    'BACK': (225, 225, 225),
+    'DEB': (105, 105, 105),
+    'LYM': (195, 100, 197),
+    'MUC': (245, 222, 179),
+    'MUS': (205, 92, 92),
+    'NORM': (244, 164, 96),
+    'STR': (70, 130, 180),
+    'TUM': (60, 179, 113),
+    ##
+    'ConneTissue': (105, 105, 105),
+    'SquamoEpithe': (244, 164, 96),
+    'Gland': (245, 222, 179),
+    'SmooMus': (205, 92, 92),
+    'CanAssoStro': (70, 130, 180),
+}
+
+colormap_hex = {
+    'White': '#FFFFFF',
+}
