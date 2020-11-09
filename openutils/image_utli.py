@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-11-07 15:44:05
+LastEditTime: 2020-11-07 15:46:14
 '''
 
 import numpy as np
@@ -98,7 +98,7 @@ def classmap_to_img(cls_map,
         names (list): corresponding names of the labels.
         colors (list): corresponding colors of the labels. e.g. colors = [(70, 130, 180), (0, 0, 0), (114, 64, 70),
         (195, 100, 197), (252, 108, 133), (205, 92, 92), (255, 163, 67)]
-        save_path (str, optional): [description]. Defaults to None.
+        save_path (str, optional): The dir (it's dirname not filename) to save images. Defaults to None.
         resolution (int, optional): Defaults to 50. if the class map is too small, use this to expand the size of the map.
         split (bool, optional): [description]. Defaults to True. if True, we save each class into one iamges additionally.
         show (bool, optional): [description]. Defaults to False. if True, preview the img.
