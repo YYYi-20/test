@@ -39,3 +39,5 @@ doc
 *.py#
 *.rst#
 *.json
+temp.py
+clinical_relevent(1).py
