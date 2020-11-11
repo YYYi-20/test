@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: Yuni
 LastEditors: XRZHANG
-LastEditTime: 2020-11-11 11:55:51
+LastEditTime: 2020-11-11 12:57:22
 '''
 
 import os
@@ -217,23 +217,3 @@ class ClassmapStatistic(object):
         probs = array / array.sum()
         s = stats.entropy(probs, base=2)
         return s
-
-
-if __name__ == '__main__':
-    preds = np.load(
-        '/data/backup2/xianrui/data/ptmc/images/pred_maps/18 28528 5/preds.npy'
-    )
-    cls_map = preds_to_classmap(preds)
-    names = [
-        'ConneTissue', 'SquamoEpithe', 'Gland', 'LYM', 'SmooMus',
-        'CanAssoStro', 'TUM'
-    ]
-
-    labels = list(range(1, 8))
-    statis = ClassmapStatistic(cls_map, labels, names)
-    a, b = statis.proportion(tumor_label=7,
-                             interest_label=range(1, 8),
-                             interaction_label=[2, 4],
-                             submap_size=(10, 10),
-                             sample_fraction=0.5)
-    statis.save_img(save_path=None, show=True)
