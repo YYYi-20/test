@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: Yuni
 LastEditors: XRZHANG
-LastEditTime: 2020-11-11 11:44:28
+LastEditTime: 2020-11-11 11:48:36
 '''
 
 import os
@@ -119,7 +119,7 @@ class ClassmapStatistic(object):
             pltshow(all_color)
         if save_path is not None:
             os.makedirs(save_path, exist_ok=True)
-            imsave(Path(save_path, 'ALL.jpeg'), all_color)
+            imsave(Path(save_path, '0_ALL.jpeg'), all_color)
 
     def distance_to_tomor(self):
         pass
@@ -131,7 +131,7 @@ class ClassmapStatistic(object):
                    submap_size=(10, 10),
                    sample_fraction=1):
         """以一个肿瘤点为中心，选择submap,计算interset_label 中每个label  占所有 interest label的比例
-            one_interset_label / all_interest_label; 背景的label为0.
+            公式(number of each one interset_label) / (number of all interest_label); 背景的label为0.
             返回结果可以再输入score函数，计算90%分位数
             
 
