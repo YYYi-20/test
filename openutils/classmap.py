@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: Yuni
 LastEditors: XRZHANG
-LastEditTime: 2020-11-11 11:48:36
+LastEditTime: 2020-11-11 11:55:51
 '''
 
 import os
@@ -12,10 +12,8 @@ import numpy as np
 from scipy import stats
 from skimage import color
 
-from openutils import *
-from openutils import classmap_to_img
-from openutils import colormap_dec as colormap
-from openutils import preds_to_classmap
+from .image_utli import *
+from .image_utli import colormap_dec as colormap
 
 
 class ClassmapStatistic(object):
