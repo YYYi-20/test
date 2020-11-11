@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: Yuni
 LastEditors: XRZHANG
-LastEditTime: 2020-11-10 21:10:42
+LastEditTime: 2020-11-10 21:30:43
 '''
 
 import os
@@ -43,7 +43,6 @@ class ClassmapStatistic(object):
             self.colors)
         # self.seed = np.random.seed(0)
 
-    '''
     def classmap_to_img(self,
                         save_path=None,
                         split=True,
@@ -61,45 +60,44 @@ class ClassmapStatistic(object):
             show (bool, optional): [description]. Defaults to False. if True, preview the img.
             font_szie (float, optional): font_szie of bar
         """
-        if not bar_size == 0:
-            # generate bar
-            try:
-                assert self.h > len(self.names)
-                padding = map_zoom(
-                    np.asarray(self.labels).reshape(-1, 1), bar_size, bar_size)
-                H = (np.linspace(
-                    0, padding.shape[0], len(self.names), endpoint=False) +
-                     bar_size) * resolution
-                W = np.repeat(padding.shape[1], len(self.names)) * resolution
-                positions = list(zip(W.astype('int64'), H.astype('int64')))
-                padding_bottom = np.zeros(shape=(self.h - padding.shape[0],
-                                                 padding.shape[1]))
-                padding = np.r_[padding, padding_bottom]
-                padding = np.c_[padding, np.zeros(shape=(self.h, 9))]
-                padding = map_zoom(padding, resolution, resolution)
+        # if not bar_size == 0:
+        #     # generate bar
+        #     try:
+        #         assert self.h > len(self.names)
+        #         padding = map_zoom(
+        #             np.asarray(self.labels).reshape(-1, 1), bar_size, bar_size)
+        #         H = (np.linspace(
+        #             0, padding.shape[0], len(self.names), endpoint=False) +
+        #              bar_size) * resolution
+        #         W = np.repeat(padding.shape[1], len(self.names)) * resolution
+        #         positions = list(zip(W.astype('int64'), H.astype('int64')))
+        #         padding_bottom = np.zeros(shape=(self.h - padding.shape[0],
+        #                                          padding.shape[1]))
+        #         padding = np.r_[padding, padding_bottom]
+        #         padding = np.c_[padding, np.zeros(shape=(self.h, 9))]
+        #         padding = map_zoom(padding, resolution, resolution)
 
-                padding_image = np.ones(
-                    (padding.shape[0], padding.shape[1], 3),
-                    dtype='uint8') * 255
-                for i, label_ in enumerate(self.labels):
-                    X, Y = np.where(padding == label_)
-                    padding_image[X, Y] = self.colors[i]
+        #         padding_image = np.ones(
+        #             (padding.shape[0], padding.shape[1], 3),
+        #             dtype='uint8') * 255
+        #         for i, label_ in enumerate(self.labels):
+        #             X, Y = np.where(padding == label_)
+        #             padding_image[X, Y] = self.colors[i]
 
-                for i in range(len(self.names)):
-                    cv2.putText(padding_image, self.names[i], positions[i],
-                                cv2.FONT_HERSHEY_SIMPLEX, font_szie, (0, 0, 0),
-                                font_thick, cv2.LINE_AA)
-                    #图片，添加的文字，左上角坐标，字体，字体大小，颜色，字体粗细
-            except:
-                bar_size = 0
-                logging.info('pleaser check the bar plot code')
-                # if rasie error in try, we set bar_size=0
+        #         for i in range(len(self.names)):
+        #             cv2.putText(padding_image, self.names[i], positions[i],
+        #                         cv2.FONT_HERSHEY_SIMPLEX, font_szie, (0, 0, 0),
+        #                         font_thick, cv2.LINE_AA)
+        #             #图片，添加的文字，左上角坐标，字体，字体大小，颜色，字体粗细
+        #     except:
+        #         bar_size = 0
+        #         logging.info('pleaser check the bar plot code')
+        # if rasie error in try, we set bar_size=0
 
         all_image = color.label2rgb(self.cls_map,
                                     colors=self.colors,
                                     bg_label=0,
-                                    bg_color=(255, 255, 255))
-
+                                    bg_color=(255, 255, 255)).astype('uint8')
         if split:
             split_images = []
             for i, label_ in enumerate(self.labels):
@@ -107,14 +105,15 @@ class ClassmapStatistic(object):
                 tmp = all_image.copy()
                 tmp[X, Y] = [255, 255, 255]
                 split_images.append(map_zoom(tmp, resolution, resolution))
+        pltshow(split_images[0])
         all_image = map_zoom(all_image, resolution, resolution)
 
-        if bar_size is not 0:
-            all_image = np.concatenate([all_image, padding_image], axis=1)
-            if split:
-                for i in range(len(split_images)):
-                    split_images[i] = np.concatenate(
-                        [split_images[i], padding_image], axis=1)
+        # if bar_size is not 0:
+        #     all_image = np.concatenate([all_image, padding_image], axis=1)
+        #     if split:
+        #         for i in range(len(split_images)):
+        #             split_images[i] = np.concatenate(
+        #                 [split_images[i], padding_image], axis=1)
 
         if show:
             pltshow(all_image)
@@ -122,10 +121,9 @@ class ClassmapStatistic(object):
             os.makedirs(save_path, exist_ok=True)
             if split:
                 for i in range(len(split_images)):
-                    imsave(Path(save_path, f'{names[i]}.jpeg'),
+                    imsave(Path(save_path, f'{self.names[i]}.jpeg'),
                            split_images[i])
             imsave(Path(save_path, 'ALL.jpeg'), all_image)
-    '''
 
     def distance_to_tomor(self):
         pass
@@ -227,8 +225,8 @@ if __name__ == '__main__':
 
     labels = list(range(1, 8))
     statis = ClassmapStatistic(cls_map, labels, names)
-    a,b=statis.proportion(tumor_label=7,
-                      interest_label=range(1, 8),
-                      interaction_label=[2, 4],
-                      submap_size=(10, 10),
-                      sample_fraction=0.5)
+    a, b = statis.proportion(tumor_label=7,
+                             interest_label=range(1, 8),
+                             interaction_label=[2, 4],
+                             submap_size=(10, 10),
+                             sample_fraction=0.5)

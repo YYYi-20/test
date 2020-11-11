@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-11-07 15:46:14
+LastEditTime: 2020-11-10 21:28:29
 '''
 
 import numpy as np
@@ -70,13 +70,22 @@ def preds_to_classmap(pred_w_h):
 
 
 def map_zoom(array, x=50, y=50):
-    row = []
-    for i in range(array.shape[0]):
-        values = array[i, :]
-        temp = np.concatenate(
-            [np.ones((x, y), dtype='uint8') * v for v in values], axis=1)
-        row.append(temp)
-    return np.concatenate(row, axis=0)
+    def fun(array2d):
+        row = []
+        for i in range(array2d.shape[0]):
+            values = array2d[i, :]
+            temp = np.concatenate(
+                [np.ones((x, y), dtype='uint8') * v for v in values], axis=1)
+            row.append(temp)
+        return np.concatenate(row, axis=0)
+
+    if len(array.shape) == 2:
+        return fun(array)
+    elif len(array.shape) == 3:
+        tmp = []
+        for i in range(array.shape[2]):
+            tmp.append(fun(array[:, :, i]))
+        return np.concatenate(tmp, axis=0)
 
 
 def classmap_to_img(cls_map,
