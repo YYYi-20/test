@@ -3,9 +3,10 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-11-11 15:03:37
+LastEditTime: 2020-11-11 15:06:05
 '''
 
+from matplotlib.pyplot import show
 import numpy as np
 from openutils import preds_to_classmap
 from openutils import ClassmapStatistic
@@ -25,11 +26,13 @@ if __name__ == '__main__':
     )  # 0 is background and empty tiles, it is set defaultly in ClassmapStatis
     tumor_label = 7
     colors = None  # use default color
+    SHOW = True  # to show imgs in processing stage
+    
     statis = ClassmapStatistic(cls_map,
                                labels,
                                names,
                                colors=colors,
-                               show=True,
+                               show=SHOW,
                                seed=0)
     interest, interation = statis.proportion(
         tumor_label=tumor_label,
