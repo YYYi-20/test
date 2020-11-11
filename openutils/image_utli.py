@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-11-10 21:28:29
+LastEditTime: 2020-11-11 11:05:36
 '''
 
 import numpy as np
@@ -14,6 +14,7 @@ from imageio import imread, imsave
 import cv2
 from pathlib import Path
 import logging
+from scipy import ndimage
 
 
 def pil_to_np(pil_img):
@@ -69,7 +70,16 @@ def preds_to_classmap(pred_w_h):
     return cls_map
 
 
-def map_zoom(array, x=50, y=50):
+def img_zoom(array, factor):
+    if len(array.shape) == 2:
+        array = ndimage.zoom(array, factor, order=0)
+        return array
+    elif len(array.shape) == 3:
+        tmp = []
+        for i in range(array.shape[2]):
+            tmp.append(ndimage.zoom(array[:, :, i], factor, order=0))
+        return np.stack(tmp, axis=2)
+    '''
     def fun(array2d):
         row = []
         for i in range(array2d.shape[0]):
@@ -86,6 +96,7 @@ def map_zoom(array, x=50, y=50):
         for i in range(array.shape[2]):
             tmp.append(fun(array[:, :, i]))
         return np.concatenate(tmp, axis=0)
+    '''
 
 
 def classmap_to_img(cls_map,

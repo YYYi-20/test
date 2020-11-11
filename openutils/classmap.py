@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: Yuni
 LastEditors: XRZHANG
-LastEditTime: 2020-11-10 21:30:43
+LastEditTime: 2020-11-11 11:44:28
 '''
 
 import os
@@ -43,14 +43,14 @@ class ClassmapStatistic(object):
             self.colors)
         # self.seed = np.random.seed(0)
 
-    def classmap_to_img(self,
-                        save_path=None,
-                        split=True,
-                        bar_size=3,
-                        resolution=20,
-                        font_szie=1.5,
-                        font_thick=3,
-                        show=False):
+    def save_img(self,
+                 save_path=None,
+                 split=True,
+                 bar_size=3,
+                 resolution=20,
+                 font_szie=1.5,
+                 font_thick=3,
+                 show=False):
         """plot or save the class_map into image files name.jpeg.
 
         Args:
@@ -94,36 +94,32 @@ class ClassmapStatistic(object):
         #         logging.info('pleaser check the bar plot code')
         # if rasie error in try, we set bar_size=0
 
-        all_image = color.label2rgb(self.cls_map,
+        all_color = color.label2rgb(self.cls_map,
                                     colors=self.colors,
                                     bg_label=0,
                                     bg_color=(255, 255, 255)).astype('uint8')
         if split:
-            split_images = []
-            for i, label_ in enumerate(self.labels):
-                X, Y = np.where(self.cls_map != label_)
-                tmp = all_image.copy()
-                tmp[X, Y] = [255, 255, 255]
-                split_images.append(map_zoom(tmp, resolution, resolution))
-        pltshow(split_images[0])
-        all_image = map_zoom(all_image, resolution, resolution)
+            if save_path is not None:
+                os.makedirs(save_path, exist_ok=True)
+                for i, label_ in enumerate(self.labels):
+                    X, Y = np.where(self.cls_map != label_)
+                    one_color = all_color.copy()
+                    one_color[X, Y] = [255, 255, 255]
+                    one_color = img_zoom(one_color, resolution)
+                    imsave(Path(save_path, f'{self.names[i]}.jpeg'), one_color)
 
+        all_color = img_zoom(all_color, resolution)
         # if bar_size is not 0:
         #     all_image = np.concatenate([all_image, padding_image], axis=1)
         #     if split:
         #         for i in range(len(split_images)):
         #             split_images[i] = np.concatenate(
         #                 [split_images[i], padding_image], axis=1)
-
         if show:
-            pltshow(all_image)
+            pltshow(all_color)
         if save_path is not None:
             os.makedirs(save_path, exist_ok=True)
-            if split:
-                for i in range(len(split_images)):
-                    imsave(Path(save_path, f'{self.names[i]}.jpeg'),
-                           split_images[i])
-            imsave(Path(save_path, 'ALL.jpeg'), all_image)
+            imsave(Path(save_path, 'ALL.jpeg'), all_color)
 
     def distance_to_tomor(self):
         pass
@@ -134,7 +130,21 @@ class ClassmapStatistic(object):
                    interaction_label=[2, 4],
                    submap_size=(10, 10),
                    sample_fraction=1):
+        """以一个肿瘤点为中心，选择submap,计算interset_label 中每个label  占所有 interest label的比例
+            one_interset_label / all_interest_label; 背景的label为0.
+            返回结果可以再输入score函数，计算90%分位数
+            
 
+        Args:
+            tumor_label (int, optional): [description]. Defaults to 7.
+            interest_label ([type], optional): [description]. Defaults to range(1, 8).
+            interaction_label (list, optional): [description]. Defaults to [2, 4].
+            submap_size (tuple, optional): [description]. Defaults to (10, 10).
+            sample_fraction (int, optional): 采样肿瘤tiles. Defaults to 1.
+
+        Returns:
+            [type]: [description]
+        """
         x_index, y_index = np.where(self.cls_map == tumor_label)
         idx = np.random.choice(range(len(y_index)),
                                size=int(sample_fraction * len(y_index)),
@@ -175,9 +185,7 @@ class ClassmapStatistic(object):
 
         interaction = np.asarray(interaction)
         interest = np.asarray(interest)
-        interest_score = self.score(interest)
-        interaction_score = self.score(interaction)
-        return interest_score, interaction_score
+        return interest, interaction
 
     def _count(self, labels, array):
         array = array.flatten().tolist()
@@ -230,3 +238,4 @@ if __name__ == '__main__':
                              interaction_label=[2, 4],
                              submap_size=(10, 10),
                              sample_fraction=0.5)
+    statis.save_img(save_path=None, show=True)
