@@ -3,10 +3,9 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-11-11 15:06:05
+LastEditTime: 2020-11-11 15:38:40
 '''
 
-from matplotlib.pyplot import show
 import numpy as np
 from openutils import preds_to_classmap
 from openutils import ClassmapStatistic
@@ -25,9 +24,9 @@ if __name__ == '__main__':
         range(1, 8)
     )  # 0 is background and empty tiles, it is set defaultly in ClassmapStatis
     tumor_label = 7
-    colors = None  # use default color
+    colors = None  # use default color, a lsit of tuples
     SHOW = True  # to show imgs in processing stage
-    
+
     statis = ClassmapStatistic(cls_map,
                                labels,
                                names,
@@ -50,7 +49,7 @@ if __name__ == '__main__':
         f'interest_score: {interest_score}\ninteration_score: {interation_score}'
     )
 
-    score_ = interest_score[[0, 1, 3]]  #用于计算entropy的score
+    score_ = interest_score[[0, 1, 3]]  #选取labels[0, 1, 3]对应的类别 用于计算entropy
     entropy_ = statis.entropy(score_)
     print(f'entropy_: {entropy_}')
 
