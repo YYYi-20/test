@@ -3,21 +3,28 @@ Descripttion: python project
 version: 0.1
 Author: Yuni
 LastEditors: XRZHANG
-LastEditTime: 2020-11-11 12:57:22
+LastEditTime: 2020-11-11 14:52:45
 '''
 
 import os
 
+import cv2
 import numpy as np
-from scipy import stats
-from skimage import color
+from scipy import ndimage, stats
+from skimage import color, morphology
 
 from .image_utli import *
 from .image_utli import colormap_dec as colormap
 
 
 class ClassmapStatistic(object):
-    def __init__(self, cls_map, labels, names, colors=None):
+    def __init__(self,
+                 cls_map,
+                 labels,
+                 names,
+                 colors=None,
+                 show=False,
+                 seed=0):
         """[summary]
 
         Args:
@@ -39,7 +46,8 @@ class ClassmapStatistic(object):
         self.w = self.cls_map.shape[1]
         assert len(self.labels) == len(self.names) and len(self.labels) == len(
             self.colors)
-        # self.seed = np.random.seed(0)
+        self.seed = np.random.seed(seed)
+        self.show = show
 
     def save_img(self,
                  save_path=None,
@@ -47,8 +55,7 @@ class ClassmapStatistic(object):
                  bar_size=3,
                  resolution=20,
                  font_szie=1.5,
-                 font_thick=3,
-                 show=False):
+                 font_thick=3):
         """plot or save the class_map into image files name.jpeg.
 
         Args:
@@ -113,14 +120,11 @@ class ClassmapStatistic(object):
         #         for i in range(len(split_images)):
         #             split_images[i] = np.concatenate(
         #                 [split_images[i], padding_image], axis=1)
-        if show:
+        if self.show:
             pltshow(all_color)
         if save_path is not None:
             os.makedirs(save_path, exist_ok=True)
             imsave(Path(save_path, '0_ALL.jpeg'), all_color)
-
-    def distance_to_tomor(self):
-        pass
 
     def proportion(self,
                    tumor_label=7,
@@ -131,7 +135,7 @@ class ClassmapStatistic(object):
         """以一个肿瘤点为中心，选择submap,计算interset_label 中每个label  占所有 interest label的比例
             公式(number of each one interset_label) / (number of all interest_label); 背景的label为0.
             返回结果可以再输入score函数，计算90%分位数
-            
+
 
         Args:
             tumor_label (int, optional): [description]. Defaults to 7.
@@ -156,7 +160,7 @@ class ClassmapStatistic(object):
             if submap is None:
                 continue
             # else, submap is not None
-            non_back_num = submap.size - self._count(0, submap)  #非背景 tiles 个数
+            non_back_num = submap.size - self._count(0, submap)  # 非背景 tiles 个数
 
             interest_counts = self._count(interest_label, submap)  # list
             sum_interest_counts = sum(interest_counts)
@@ -185,7 +189,16 @@ class ClassmapStatistic(object):
         interest = np.asarray(interest)
         return interest, interaction
 
-    def _count(self, labels, array):
+    def _count(self, labels, array, sum=False):
+        """分别计算每个label在整个array中的数量
+
+        Args:
+            labels ([type]): [description]
+            array ([type]): [description]
+
+        Returns:
+            [type]: [description]
+        """
         array = array.flatten().tolist()
         if isinstance(labels, int):
             return array.count(labels)
@@ -196,7 +209,100 @@ class ClassmapStatistic(object):
             for i in labels:
                 tmp = array.count(i)
                 counts.append(tmp)
-            return np.asarray(counts)
+            if sum:
+                return sum(counts)
+            else:
+                return np.asarray(counts)
+
+    def score(self, array, percent=90):
+        score = np.percentile(array, percent, axis=0)
+        return score
+
+    def entropy(self, array):
+        # 计算概率分布==========计算熵=========
+        probs = array / array.sum()
+        s = stats.entropy(probs, base=2)
+        return s
+
+    def tumor_mask_preprocess(self, tumor_label, disk, small_object):
+        '''腐蚀膨胀，选取合适参数
+        '''
+        self.tumor_mask = np.where(self.cls_map == tumor_label, 255,
+                                   0).astype('uint8')
+        if self.show:
+            pltshow(self.tumor_mask)
+        kernel = morphology.disk(disk)
+        tumor_mask = cv2.morphologyEx(self.tumor_mask, cv2.MORPH_CLOSE, kernel)
+        # tumor_mask =morphology.closing(tumor_mask, selem=None, out=None)
+        # tumor_mask=morphology.remove_small_holes(tumor_mask, 1000)
+        tumor_mask = ndimage.binary_fill_holes(tumor_mask)
+        tumor_mask = morphology.remove_small_objects(tumor_mask, small_object)
+        tumor_mask_ = tumor_mask.astype(np.uint8) * 255
+        if self.show:
+            pltshow(tumor_mask_)
+        return tumor_mask_
+
+    def calc_distance(self,
+                      tumor_mask,
+                      thres,
+                      interest_label,
+                      tumor_label,
+                      ratio=False):
+        '''far, around, inside
+        '''
+        # 寻找肿瘤区域，并计算感兴趣的label到肿瘤区域的距离分布
+        contours, _ = cv2.findContours(tumor_mask, cv2.RETR_TREE,
+                                       cv2.CHAIN_APPROX_SIMPLE)
+
+        if len(contours) > 0:
+            distance = [[] for i in range(len(interest_label))]
+            for i in range(self.h):
+                for j in range(self.w):
+                    c = self.cls_map[i, j]
+                    if c in interest_label:
+                        temp = max([
+                            cv2.pointPolygonTest(cnt, (i, j), True)
+                            for cnt in contours
+                        ])
+                        idx = interest_label.index(c)
+                        distance[idx].append(temp)
+            for i, dis in enumerate(distance):
+                tmp = self.distance_sort(np.asarray(dis), thres)
+                distance[i] = tmp
+            self.distance = np.asarray(distance)
+
+            if ratio is True:
+                num_tumor = self._count(tumor_label, self.cls_map)
+                self.distance_ratio = self.distance / num_tumor
+
+        else:
+            self.distance = None
+            self.distance_ratio = None
+
+    def distance_sort(self, array, thres=-20):
+        if len(array) == 0:
+            return [None, None, None]
+        else:
+            far = np.sum(array < thres)
+            inside = np.sum(array > 0)
+            around = len(array.flatten()) - far - inside
+            return [far, around, inside]
+
+    def ratios(self, top, down, array):
+        """top = [1,2,3], down = [1,3,5],计算数组中 1,2,3 占sum(1,3,5)的比例
+        分别计算top中每个label的数量，与占down的总和相除
+
+        Args:
+            top ([type]): [description]
+            down ([type]): [description]
+            array ([type]): [description]
+
+        Returns:
+            [type]: [description]
+        """
+        a = self._count(top, array)
+        b = self._count(down, array, True)
+        return a / b
 
     def _submap(self, center, sub_size):
         top, bottom, = center[0] - int(sub_size[0] / 2), center[0] + int(
@@ -207,13 +313,3 @@ class ClassmapStatistic(object):
             return self.cls_map[top:bottom, left:right]
         else:
             return None
-
-    def score(self, array, percent=90):
-        score = np.percentile(array, percent, axis=0)
-        return score
-
-    def entropy(self, array):
-        #计算概率分布==========计算熵=========
-        probs = array / array.sum()
-        s = stats.entropy(probs, base=2)
-        return s
