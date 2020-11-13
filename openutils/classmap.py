@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: Yuni
 LastEditors: XRZHANG
-LastEditTime: 2020-11-13 16:38:07
+LastEditTime: 2020-11-13 16:44:37
 '''
 
 import os
@@ -22,6 +22,7 @@ class ClassmapStatistic(object):
                  cls_map,
                  labels,
                  names,
+                 tumor_label,
                  colors=None,
                  show=False,
                  seed=0):
@@ -48,7 +49,8 @@ class ClassmapStatistic(object):
             self.colors)
         self.seed = np.random.seed(seed)
         self.show = show
-        self.tumor_exist = np.any(self.cls_map == tumor_label)
+        self.tumor_label = tumor_label
+        self.tumor_exist = np.any(self.cls_map == self.tumor_label)
 
     def save_img(self,
                  save_path=None,
