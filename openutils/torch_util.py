@@ -69,6 +69,8 @@ class data_prefetcher():
     def __init__(self, loader, mean=None, std=None):
         self.loader = iter(loader)
         self.stream = torch.cuda.Stream()
+        self.mean = mean
+        self.std = std
         if mean is not None and std is not None:
             self.mean = torch.tensor(mean).cuda().view(1, 3, 1, 1)
             self.std = torch.tensor(std).cuda().view(1, 3, 1, 1)
@@ -103,7 +105,7 @@ class data_prefetcher():
             #     self.next_input = self.next_input.half()
             # else:
             self.next_input = self.next_input.float()
-            if mean is not None and std is not None:
+            if self.mean is not None and self.std is not None:
                 self.next_input = self.next_input.sub_(self.mean).div_(
                     self.std)
 

@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: Yuni
 LastEditors: XRZHANG
-LastEditTime: 2020-11-11 14:52:45
+LastEditTime: 2020-11-13 16:38:07
 '''
 
 import os
@@ -48,6 +48,7 @@ class ClassmapStatistic(object):
             self.colors)
         self.seed = np.random.seed(seed)
         self.show = show
+        self.tumor_exist = np.any(self.cls_map == tumor_label)
 
     def save_img(self,
                  save_path=None,
@@ -98,9 +99,11 @@ class ClassmapStatistic(object):
         #         bar_size = 0
         #         logging.info('pleaser check the bar plot code')
         # if rasie error in try, we set bar_size=0
+        l = np.unique(self.cls_map)
+        colors = [self.colors[i - 1] for i in l if i != 0]
 
         all_color = color.label2rgb(self.cls_map,
-                                    colors=self.colors,
+                                    colors=colors,
                                     bg_label=0,
                                     bg_color=(255, 255, 255)).astype('uint8')
         if split:
@@ -125,17 +128,18 @@ class ClassmapStatistic(object):
         if save_path is not None:
             os.makedirs(save_path, exist_ok=True)
             imsave(Path(save_path, '0_ALL.jpeg'), all_color)
+            logging.info(f'save in {save_path}')
 
     def proportion(self,
                    tumor_label=7,
                    interest_label=range(1, 8),
                    interaction_label=[2, 4],
                    submap_size=(10, 10),
-                   sample_fraction=1):
+                   sample_fraction=1,
+                   threshold=(0.3, 0.95)):
         """以一个肿瘤点为中心，选择submap,计算interset_label 中每个label  占所有 interest label的比例
             公式(number of each one interset_label) / (number of all interest_label); 背景的label为0.
             返回结果可以再输入score函数，计算90%分位数
-
 
         Args:
             tumor_label (int, optional): [description]. Defaults to 7.
@@ -165,8 +169,8 @@ class ClassmapStatistic(object):
             interest_counts = self._count(interest_label, submap)  # list
             sum_interest_counts = sum(interest_counts)
             tumor_counts = self._count(tumor_label, submap)
-            if not (tumor_counts / non_back_num >= 0.3
-                    and tumor_counts / non_back_num < 0.95):
+            if not (tumor_counts / non_back_num >= threshold[0]
+                    and tumor_counts / non_back_num < threshold[1]):
                 continue
             # else:
             interest_ratio = interest_counts / sum_interest_counts
@@ -215,8 +219,10 @@ class ClassmapStatistic(object):
                 return np.asarray(counts)
 
     def score(self, array, percent=90):
+        if len(array) == 0:
+            return -1
         score = np.percentile(array, percent, axis=0)
-        return score
+        return array.shape, score
 
     def entropy(self, array):
         # 计算概率分布==========计算熵=========
@@ -281,7 +287,7 @@ class ClassmapStatistic(object):
 
     def distance_sort(self, array, thres=-20):
         if len(array) == 0:
-            return [None, None, None]
+            return [0, 0, 0]
         else:
             far = np.sum(array < thres)
             inside = np.sum(array > 0)
