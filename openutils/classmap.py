@@ -2,8 +2,8 @@
 Descripttion: python project
 version: 0.1
 Author: Yuni
-LastEditors: XRZHANG
-LastEditTime: 2020-11-13 16:44:37
+LastEditors: Please set LastEditors
+LastEditTime: 2020-11-15 19:12:30
 '''
 
 import os
@@ -222,7 +222,7 @@ class ClassmapStatistic(object):
 
     def score(self, array, percent=90):
         if len(array) == 0:
-            return -1
+            return (-1, -1), [-1]*len(self.names)
         score = np.percentile(array, percent, axis=0)
         return array.shape, score
 
@@ -284,12 +284,12 @@ class ClassmapStatistic(object):
                 self.distance_ratio = self.distance / num_tumor
 
         else:
-            self.distance = None
-            self.distance_ratio = None
+            self.distance = np.zeros((len(self.names), 3))-1
+            self.distance_ratio = np.zeros((len(self.names), 3))-1
 
     def distance_sort(self, array, thres=-20):
         if len(array) == 0:
-            return [0, 0, 0]
+            return [-1, -1, -1]
         else:
             far = np.sum(array < thres)
             inside = np.sum(array > 0)
