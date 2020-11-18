@@ -1,4 +1,11 @@
 '''
+Descripttion: python project
+version: 0.1
+Author: XRZHANG
+LastEditors: XRZHANG
+LastEditTime: 2020-11-18 16:19:45
+'''
+'''
 This is a Dataset generator for slide images.
 '''
 import logging

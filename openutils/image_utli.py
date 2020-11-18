@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-11-11 11:46:27
+LastEditTime: 2020-11-17 17:22:41
 '''
 
 import numpy as np
@@ -97,6 +97,34 @@ def img_zoom(array, factor):
             tmp.append(fun(array[:, :, i]))
         return np.concatenate(tmp, axis=0)
     '''
+
+
+def remove_zero_padding(img):
+    """[summary]
+
+    Args:
+        array ([type]): 2D array
+    Returns:
+        [type]: [description]
+    """
+    def column_mask(array):
+        mask = (array == 0).all(0)
+        return mask
+
+    if len(img.shape) == 2:
+        c_mask = column_mask(img)
+        r_mask = column_mask(img.T)
+        img = img[~r_mask, ~c_mask]
+        return img
+    elif len(img.shape) == 3:
+        img = img.transpose(2, 0, 1)  # channel first
+        summed = np.sum(img, axis=0)
+        c_mask = column_mask(summed)
+        r_mask = column_mask(summed.T)
+        img = img[:, :, ~c_mask]
+        img = img[:, ~r_mask, :]
+        img = img.transpose(1, 2, 0)  # channel last
+        return img
 
 
 def color_transform(value):
