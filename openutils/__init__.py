@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-11-16 21:18:37
+LastEditTime: 2020-11-20 20:50:32
 '''
 #
 # openutils - Python utils for the whole slide image

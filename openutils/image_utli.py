@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-11-17 17:22:41
+LastEditTime: 2020-11-20 21:29:28
 '''
 
 import numpy as np
@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import os
 from imageio import imsave
 import cv2
+import torch
 from pathlib import Path
 import logging
 from scipy import ndimage
@@ -43,6 +44,8 @@ def pltshow(img):
         ValueError: [description]
     """
     plt.figure()
+    if isinstance(img, torch.Tensor):
+        img = img.cpu().data.numpy()
     if isinstance(img, np.ndarray):
         if len(img.shape) == 2:
             plt.imshow(img)
@@ -99,16 +102,16 @@ def img_zoom(array, factor):
     '''
 
 
-def remove_zero_padding(img):
+def remove_padding(img, padding_value):
     """[summary]
 
     Args:
-        array ([type]): 2D array
+        array ([type]): 2D/3D img array
     Returns:
         [type]: [description]
     """
     def column_mask(array):
-        mask = (array == 0).all(0)
+        mask = (array == padding_value).all(0)
         return mask
 
     if len(img.shape) == 2:
