@@ -2,8 +2,8 @@
 Descripttion: python project
 version: 0.1
 Author: XRZHANG
-LastEditors: XRZHANG
-LastEditTime: 2020-11-20 21:29:28
+LastEditors: Please set LastEditors
+LastEditTime: 2020-11-22 23:45:28
 '''
 
 import numpy as np
@@ -62,13 +62,15 @@ def pltshow(img):
         plt.imshow(pil_to_np(img))
 
 
-def preds_to_classmap(pred_w_h):
+def preds_to_classmap(pred_w_h, padding=1):
     '''
     ndarray with shape [preds,w,h]
     '''
     value, w_index, h_index = pred_w_h[:, 0], pred_w_h[:, 1], pred_w_h[:, 2]
     w_max, h_max = np.max(w_index), np.max(h_index)
-    cls_map = np.zeros((h_max + 1, w_max + 1), dtype='uint8')  #右侧 下侧 加白边
+    cls_map = np.zeros((h_max + padding, w_max + padding),
+                       dtype='uint8')  # 右侧 下侧 加白边
+
     cls_map[h_index, w_index] = value
     return cls_map
 
@@ -174,7 +176,7 @@ colormap_dec = {
     'CanAssoStro': (70, 130, 180),
 }
 
-#字符串color map
+# 字符串color map
 colormap_hex = {
     'White': '#FFFFFF',
 }
