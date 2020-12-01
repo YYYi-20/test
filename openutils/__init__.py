@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-11-20 20:50:32
+LastEditTime: 2020-12-01 20:07:03
 '''
 #
 # openutils - Python utils for the whole slide image
@@ -23,4 +23,5 @@ from .wsi_util import *
 from .image_utli import *
 from .torch_util import *
 from .classmap import *
-from .numpy_ext import *
+from .file_util import *
+from .signal_util import *

@@ -249,17 +249,21 @@ class slide_window():
         self.size = size
         self.step = step
 
-    def get_data(self, data, start=0, end=-1):
+    def get_data(self, start=0, end=-1):
+        data = self.data.copy()
+        shape = data.shape
         if end == -1:
-            end = data.shape[-1]
-        end_index = np.arange(start + self.step, end, self.step)
-        start_index = end_index - self.step
-        result = []
-        if len(data.shape) == 2:
-            for l, r in zip(end_index, start_index):
-                result.append(data[:, l:r])
+            end = shape[-1]
+        end_index = np.arange(start + self.size, end, self.step)
+        start_index = end_index - self.size
+        if len(shape) == 2:
+            result = []
+            for l, r in zip(start_index, end_index):
+                tmp = data[:, l:r]
+                result.append(tmp)
             return np.asarray(result)
-        elif len(data.shape) == 1:
+        else:
+            result = []
             for l, r in zip(end_index, start_index):
                 result.append(data[l:r])
             return np.asarray(result)
@@ -269,15 +273,16 @@ class slide_window():
         shape = data.shape
         if end == -1:
             end = shape[-1]
-        end_index = np.arange(start + self.step, end, self.step)
-        start_index = end_index - self.step
+        end_index = np.arange(start + self.size, end, self.step)
+        start_index = end_index - self.size
         result = []
         if len(shape) == 2:
-            for l, r in zip(end_index, start_index):
-                tmp = [fun(data[i, l:r]) for i in range(shape[0])]
+            for l, r in zip(start_index, end_index):
+                tmp = np.asarray([fun(data[i, l:r]) for i in range(shape[0])])
                 result.append(tmp)
-            return np.asarray(result).T
-        elif len(shape) == 1:
+            result = np.asarray(result)
+            return result
+        else:
             for l, r in zip(end_index, start_index):
                 item = fun(data[l:r])
                 result.append(item)
