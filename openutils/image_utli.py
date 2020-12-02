@@ -2,8 +2,8 @@
 Descripttion: python project
 version: 0.1
 Author: XRZHANG
-LastEditors: Please set LastEditors
-LastEditTime: 2020-11-22 23:45:28
+LastEditors: XRZHANG
+LastEditTime: 2020-12-02 15:50:44
 '''
 
 import numpy as np
@@ -23,7 +23,8 @@ def pil_to_np(pil_img):
     return rgb
 
 
-def np_to_pil(np_img):
+def to_pil(np_img):
+    '''
     if np_img.dtype == 'bool':
         np_img = np_img.astype('uint8') * 255
     elif np_img.max() <= 1 and np_img.min() >= 0:
@@ -31,6 +32,9 @@ def np_to_pil(np_img):
     else:
         np_img = np_img.astype('uint8')
     return Image.fromarray(np_img)
+    '''
+    from torchvision.transforms.functional import to_pil_image
+    return to_pil_image(np_img)
 
 
 def pltshow(img):

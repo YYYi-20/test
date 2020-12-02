@@ -3,9 +3,10 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-01 17:48:19
+LastEditTime: 2020-12-02 14:35:32
 '''
 import json
+from operator import itemgetter
 
 
 def load_json(filenmae):
@@ -23,3 +24,7 @@ def dump_json(dict, filename):
         return 1
     except:
         return 0
+
+
+def get_values(dic, keys):
+    return itemgetter(*keys)(dic)
