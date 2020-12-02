@@ -3,18 +3,12 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-02 15:50:44
+LastEditTime: 2020-12-02 16:33:28
 '''
 
 import numpy as np
-from PIL import Image
 import matplotlib.pyplot as plt
-import os
-from imageio import imsave
-import cv2
 import torch
-from pathlib import Path
-import logging
 from scipy import ndimage
 
 
@@ -23,16 +17,7 @@ def pil_to_np(pil_img):
     return rgb
 
 
-def to_pil(np_img):
-    '''
-    if np_img.dtype == 'bool':
-        np_img = np_img.astype('uint8') * 255
-    elif np_img.max() <= 1 and np_img.min() >= 0:
-        np_img = (np_img * 255).astype('uint8')
-    else:
-        np_img = np_img.astype('uint8')
-    return Image.fromarray(np_img)
-    '''
+def np_to_pil(np_img):
     from torchvision.transforms.functional import to_pil_image
     return to_pil_image(np_img)
 
@@ -88,24 +73,6 @@ def img_zoom(array, factor):
         for i in range(array.shape[2]):
             tmp.append(ndimage.zoom(array[:, :, i], factor, order=0))
         return np.stack(tmp, axis=2)
-    '''
-    def fun(array2d):
-        row = []
-        for i in range(array2d.shape[0]):
-            values = array2d[i, :]
-            temp = np.concatenate(
-                [np.ones((x, y), dtype='uint8') * v for v in values], axis=1)
-            row.append(temp)
-        return np.concatenate(row, axis=0)
-
-    if len(array.shape) == 2:
-        return fun(array)
-    elif len(array.shape) == 3:
-        tmp = []
-        for i in range(array.shape[2]):
-            tmp.append(fun(array[:, :, i]))
-        return np.concatenate(tmp, axis=0)
-    '''
 
 
 def remove_padding(img, padding_value):
