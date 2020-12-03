@@ -3,22 +3,36 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-11-18 16:19:45
+LastEditTime: 2020-12-03 15:19:41
 '''
 '''
 This is a Dataset generator for slide images.
 '''
 import logging
-import os
-import sys
+from pathlib import Path
 
 import numpy as np
-import openslide
+from openslide import OpenSlide, ImageSlide
+from openslide.lowlevel import OpenSlideUnsupportedFormatError
 from openslide import deepzoom
 from torch.utils.data import Dataset
 
 from .image_utli import *
 from .normalize_staining import normalize_staining
+from .utils import dump_json
+
+
+def open_slide(filename):
+    """Open a whole-slide or regular image.
+
+    Return an OpenSlide object for whole-slide images and an ImageSlide
+    object for other types of images."""
+    if isinstance(filename, Path):
+        filename = str(filename)
+    try:
+        return OpenSlide(filename)
+    except OpenSlideUnsupportedFormatError:
+        return ImageSlide(filename)
 
 
 class WsiDataSet(Dataset):
@@ -49,17 +63,22 @@ class WsiDataSet(Dataset):
         self.overlap = overlap
         self.limit_bounds = limit_bounds
         self.resolution = resolution
+        self._properties = dict(self.slide.properties)
         self._preprocess()
 
+    @property
+    def property(self):
+        return self._property
+
     def _preprocess(self):
-        self.mpp_x = eval(
-            self.slide.properties.get(openslide.PROPERTY_NAME_MPP_X))
-        mpps = np.asarray([1, 2, 3, 4, 5]) * self.mpp_x
-        self.level = np.abs(np.subtract(mpps, self.resolution)).argmin()
+        mpp_x = float(self._properties['openslide.mpp-x'])
+        mpp_y = float(self._properties['openslide.mpp-y'])
+        mpp = (mpp_x + mpp_y) / 2
+        levels = np.asarray([1, 2, 3, 4, 5])
+        self.level = np.abs(np.subtract(levels * mpp,
+                                        self.resolution)).argmin()
         if not self.level == 1:
-            logging.warn(
-                f'mpp={self.mpp_x}, so we use L{self.level} in {self.resolution}um'
-            )
+            logging.warn(f'mpp={mpp_x}, so we use L{self.level}')
 
         self.data_gen = deepzoom.DeepZoomGenerator(self.slide, self.tile_size,
                                                    self.overlap,
@@ -72,6 +91,9 @@ class WsiDataSet(Dataset):
                                      range(self.num_tiles[1]))
         self.W, self.H = self.W.flatten(), self.H.flatten()
 
+        self._properties['l0_offset'] = self.data_gen._l0_offset
+        self._properties['l_dimensions'] = self.data_gen._l_dimensions
+
     def __len__(self):
         return self.num_tiles[0] * self.num_tiles[1]
 
@@ -80,10 +102,13 @@ class WsiDataSet(Dataset):
         tile = self.data_gen.get_tile(self.dz_level, (w, h))
         return tile
 
+    def save_properties(self, json_file):
+        return dump_json(self._properties, json_file)
+
     def save_tiles(self, out_dir, bw_thres=230, bw_ratio=0.5):
         self.bw_thres = bw_thres
         self.bw_ratio = bw_ratio
-        os.makedirs(out_dir, exist_ok=True)
+        Path(out_dir).mkdir(parents=True, exist_ok=True)
         for w, h in zip(self.W, self.H):
             tile = self.data_gen.get_tile(self.dz_level, (w, h))
             if not tile.size == (self.tile_size, self.tile_size):
@@ -94,10 +119,8 @@ class WsiDataSet(Dataset):
             bw = np.where(gray < bw_thres, 0, 1)
             if np.average(bw) < bw_ratio:
                 try:
-                    normalize_staining(
-                        pil_to_np(tile),
-                        os.path.join(out_dir, f'w{w}_h{h}.jpeg'))
+                    normalize_staining(pil_to_np(tile),
+                                       Path(out_dir, f'w{w}_h{h}.jpeg'))
                 except:
                     pass
-                #     logging.error(f'normal error in tile w,h=({w},{h})')
         logging.info(f'finished tiling and normalizing to -> {out_dir}')

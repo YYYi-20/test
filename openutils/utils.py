@@ -3,9 +3,10 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-02 14:35:32
+LastEditTime: 2020-12-03 14:16:26
 '''
 import json
+import os
 from operator import itemgetter
 
 
@@ -28,3 +29,10 @@ def dump_json(dict, filename):
 
 def get_values(dic, keys):
     return itemgetter(*keys)(dic)
+
+
+def is_empty(path):
+    if not isinstance(path, str):
+        path = str(path)
+    flag = len(os.listdir(path)) == 0
+    return flag
