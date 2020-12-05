@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-11-20 21:50:14
+LastEditTime: 2020-12-05 14:29:02
 '''
 
 import cv2
@@ -15,6 +15,12 @@ import torch
 
 class Rotate():
     def __init__(self, flipcode, p):
+        """[summary]
+
+        Args:
+            flipcode (int): 0:vertical , 1:horizional, -1 both
+            p ([type]): [description]
+        """
         self.flipcode = flipcode
         self.p = p
 

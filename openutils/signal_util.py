@@ -254,7 +254,8 @@ class slide_window():
         shape = data.shape
         if end == -1:
             end = shape[-1]
-        end_index = np.arange(start + self.size, end, self.step)
+        assert start + self.size < shape[-1] + 1
+        end_index = np.arange(start + self.size, end + 1, self.step)
         start_index = end_index - self.size
         if len(shape) == 2:
             result = []
@@ -272,8 +273,9 @@ class slide_window():
         data = self.data.copy()
         shape = data.shape
         if end == -1:
-            end = shape[-1]
-        end_index = np.arange(start + self.size, end, self.step)
+            end = 701
+        assert start + self.size < shape[-1] + 1
+        end_index = np.arange(start + self.size, end + 1, self.step)
         start_index = end_index - self.size
         result = []
         if len(shape) == 2:
