@@ -4,6 +4,7 @@
 *.so
 *.tar.gz
 *.log
+.history
 *.swp
 *.lprof
 *.npy

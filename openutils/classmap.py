@@ -2,19 +2,84 @@
 Descripttion: python project
 version: 0.1
 Author: Yuni
-LastEditors: Please set LastEditors
-LastEditTime: 2020-11-15 19:12:30
+LastEditors: XRZHANG
+LastEditTime: 2020-12-07 19:59:25
 '''
 
 import os
 
 import cv2
+import logging
 import numpy as np
 from scipy import ndimage, stats
 from skimage import color, morphology
+from imageio import imsave
+from pathlib import Path
 
 from .image_utli import *
 from .image_utli import colormap_dec as colormap
+
+
+def _count(labels, array):
+    """分别计算每个label在整个array中的数量 if not exist, counts=0
+
+    Args:
+        labels ([type]): [description]
+        array ([type]): [description]
+
+    Returns:
+        ndarray: [description]
+    """
+    array = array.flatten().tolist()
+    if isinstance(labels, int):
+        return array.count(labels)
+    elif len(labels) == 1:
+        return array.count(labels[0])
+    else:
+        counts = []
+        for i in labels:
+            tmp = array.count(i)
+            counts.append(tmp)
+        return np.asarray(counts)
+
+
+def group_count(array, thres=-20):
+    if len(array) == 0:
+        return [-1, -1, -1]
+    else:
+        far = np.sum(array < thres)
+        inside = np.sum(array > 0)
+        around = len(array.flatten()) - far - inside
+        return [far, around, inside]
+
+
+def _ratios(top, down, array):
+    """top = [1,2,3], down = [1,3,5],计算数组中 1,2,3 占sum[1,3,5]的比例
+    分别计算top中每个label的数量，与占down的总和相除
+
+    Args:
+        top ([type]): [description]
+        down ([type]): [description]
+        array ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
+    a = _count(top, array)
+    b = _count(down, array).sum()
+    return list(a / b * 100)
+
+
+def get_submap(center, size, array):
+    x, y = center
+    height, width = size
+    h, w = array.shape
+    x1, x2, = x - int(height / 2), x + int((height + 1) / 2)
+    y1, y2 = y - int(width / 2), y + int((width + 1) / 2)
+    if x1 > -1 and x2 < h + 1 and y1 > -1 and y2 < w + 1:
+        return array[x1:x2, y1:y2]
+    else:
+        return None
 
 
 class ClassmapStatistic(object):
@@ -31,18 +96,14 @@ class ClassmapStatistic(object):
         Args:
             cls_map (ndarray): 2d-array.
             labels (list): the value in the classmap which we want to plot. For
-                            the value not in labels list, we will plot white. !!!!!Donot use 0
-                            in labels except background, as we defaulty set tiles with value 0 to white color.
+                            the value not in labels list, we will plot white. 
+                            !!!!!we defaulty set tiles with value 0 to white color.
             names (list): corresponding names of the labels.
             colors (list): corresponding colors of the labels. e.g. colors = [(70, 130, 180), (0, 0, 0), (114, 64, 70),
             (195, 100, 197), (252, 108, 133), (205, 92, 92), (255, 163, 67)]
         """
         self.cls_map = cls_map
-        self.labels = labels
-        self.names = names
-        self.colors = colors
-        if self.colors is None:
-            self.colors = [colormap[i] for i in self.names]
+
         self.h = self.cls_map.shape[0]
         self.w = self.cls_map.shape[1]
         assert len(self.labels) == len(self.names) and len(self.labels) == len(
@@ -53,12 +114,12 @@ class ClassmapStatistic(object):
         self.tumor_exist = np.any(self.cls_map == self.tumor_label)
 
     def save_img(self,
+                 labels,
+                 names,
+                 colors=None,
                  save_path=None,
                  split=True,
-                 bar_size=3,
-                 resolution=20,
-                 font_szie=1.5,
-                 font_thick=3):
+                 resolution=20):
         """plot or save the class_map into image files name.jpeg.
 
         Args:
@@ -68,39 +129,10 @@ class ClassmapStatistic(object):
             show (bool, optional): [description]. Defaults to False. if True, preview the img.
             font_szie (float, optional): font_szie of bar
         """
-        # if not bar_size == 0:
-        #     # generate bar
-        #     try:
-        #         assert self.h > len(self.names)
-        #         padding = map_zoom(
-        #             np.asarray(self.labels).reshape(-1, 1), bar_size, bar_size)
-        #         H = (np.linspace(
-        #             0, padding.shape[0], len(self.names), endpoint=False) +
-        #              bar_size) * resolution
-        #         W = np.repeat(padding.shape[1], len(self.names)) * resolution
-        #         positions = list(zip(W.astype('int64'), H.astype('int64')))
-        #         padding_bottom = np.zeros(shape=(self.h - padding.shape[0],
-        #                                          padding.shape[1]))
-        #         padding = np.r_[padding, padding_bottom]
-        #         padding = np.c_[padding, np.zeros(shape=(self.h, 9))]
-        #         padding = map_zoom(padding, resolution, resolution)
+        if colors is None:
+            assert names is not None
+            colors = [colormap[i] for i in names]
 
-        #         padding_image = np.ones(
-        #             (padding.shape[0], padding.shape[1], 3),
-        #             dtype='uint8') * 255
-        #         for i, label_ in enumerate(self.labels):
-        #             X, Y = np.where(padding == label_)
-        #             padding_image[X, Y] = self.colors[i]
-
-        #         for i in range(len(self.names)):
-        #             cv2.putText(padding_image, self.names[i], positions[i],
-        #                         cv2.FONT_HERSHEY_SIMPLEX, font_szie, (0, 0, 0),
-        #                         font_thick, cv2.LINE_AA)
-        #             #图片，添加的文字，左上角坐标，字体，字体大小，颜色，字体粗细
-        #     except:
-        #         bar_size = 0
-        #         logging.info('pleaser check the bar plot code')
-        # if rasie error in try, we set bar_size=0
         l = np.unique(self.cls_map)
         colors = [self.colors[i - 1] for i in l if i != 0]
 
@@ -108,10 +140,10 @@ class ClassmapStatistic(object):
                                     colors=colors,
                                     bg_label=0,
                                     bg_color=(255, 255, 255)).astype('uint8')
-        if split:
+        if split:  # split  not pass test
             if save_path is not None:
                 os.makedirs(save_path, exist_ok=True)
-                for i, label_ in enumerate(self.labels):
+                for i, label_ in enumerate(labels):
                     X, Y = np.where(self.cls_map != label_)
                     one_color = all_color.copy()
                     one_color[X, Y] = [255, 255, 255]
@@ -119,12 +151,6 @@ class ClassmapStatistic(object):
                     imsave(Path(save_path, f'{self.names[i]}.jpeg'), one_color)
 
         all_color = img_zoom(all_color, resolution)
-        # if bar_size is not 0:
-        #     all_image = np.concatenate([all_image, padding_image], axis=1)
-        #     if split:
-        #         for i in range(len(split_images)):
-        #             split_images[i] = np.concatenate(
-        #                 [split_images[i], padding_image], axis=1)
         if self.show:
             pltshow(all_color)
         if save_path is not None:
@@ -134,24 +160,25 @@ class ClassmapStatistic(object):
 
     def proportion(self,
                    tumor_label=7,
-                   interest_label=range(1, 8),
-                   interaction_label=[2, 4],
-                   submap_size=(10, 10),
+                   first_label=range(1, 8),
+                   first_kernel_size=(10, 10),
+                   second_label=[2, 4],
+                   second_kernel_size=(3, 3),
                    sample_fraction=1,
                    threshold=(0.3, 0.95)):
-        """以一个肿瘤点为中心，选择submap,计算interset_label 中每个label  占所有 interest label的比例
-            公式(number of each one interset_label) / (number of all interest_label); 背景的label为0.
-            返回结果可以再输入score函数，计算90%分位数
+        """以每一个肿瘤点为中心，选择submap,计算interset_label 中每个label  占所有 interest label的比例
+            公式(number of each one interset_label) / (number of all first_label); 背景的label为0.
+            返回list结果可以再输入score函数，计算90%分位数
 
         Args:
             tumor_label (int, optional): [description]. Defaults to 7.
-            interest_label ([type], optional): [description]. Defaults to range(1, 8).
-            interaction_label (list, optional): [description]. Defaults to [2, 4].
-            submap_size (tuple, optional): [description]. Defaults to (10, 10).
+            first_label ([type], optional): [description]. Defaults to range(1, 8).
+            first_kernel_size (tuple, optional): [description]. Defaults to (10, 10).
+            second_label (list, optional): [description]. Defaults to [2, 4].
             sample_fraction (int, optional): 采样肿瘤tiles. Defaults to 1.
 
         Returns:
-            [type]: [description]
+            tuple: [description]
         """
         x_index, y_index = np.where(self.cls_map == tumor_label)
         idx = np.random.choice(range(len(y_index)),
@@ -159,70 +186,44 @@ class ClassmapStatistic(object):
                                replace=False)
         x_index, y_index = x_index[idx], y_index[idx]
 
-        interest = []
-        interaction = []
-        for i, j in zip(x_index, y_index):
-            submap = self._submap((i, j), submap_size)
+        first = []
+        second = []
+        for x, y in zip(x_index, y_index):
+            submap = get_submap((x, y), first_kernel_size, self.cls_map)
             if submap is None:
                 continue
-            # else, submap is not None
-            non_back_num = submap.size - self._count(0, submap)  # 非背景 tiles 个数
-
-            interest_counts = self._count(interest_label, submap)  # list
+            # if submap is not None, run below
+            # 非背景 tiles 个数
+            non_back_num = submap.size - _count(0, submap)
+            # the number of each interest label in submap
+            interest_counts = _count(first_label, submap)
             sum_interest_counts = sum(interest_counts)
-            tumor_counts = self._count(tumor_label, submap)
+            # the number of tumor tiles in submap
+            tumor_counts = _count(tumor_label, submap)
             if not (tumor_counts / non_back_num >= threshold[0]
                     and tumor_counts / non_back_num < threshold[1]):
                 continue
-            # else:
-            interest_ratio = interest_counts / sum_interest_counts
-            interest.append(interest_ratio)
+            # make sure the proporation of tumor  in submap is in threshold
+            # if tumor counts in threshold, add result to list
+            # add (counts,proporation) to list
+            first.append(interest_counts,interest_counts / sum_interest_counts))
 
-            interaction_counts = np.zeros(len(interaction_label))
-            M, N = np.where(submap == tumor_label)
-            for m, n in zip(M, N):
-                if m - 1 >= 0 and m + 1 < submap_size[
-                        0] + 1 and n - 1 >= 0 and n + 1 < submap_size[
-                            1] + 1 and (m % 3 == 0):
-                    submap2 = submap[m - 1:m + 2, n - 1:n + 2]
-                    tmp = self._count(interaction_label, submap2)
-                    interaction_counts += tmp
-
-            interaction_ratio = interaction_counts / sum_interest_counts
-            interaction.append(interaction_ratio)
-
-        interaction = np.asarray(interaction)
-        interest = np.asarray(interest)
-        return interest, interaction
-
-    def _count(self, labels, array, sum=False):
-        """分别计算每个label在整个array中的数量
-
-        Args:
-            labels ([type]): [description]
-            array ([type]): [description]
-
-        Returns:
-            [type]: [description]
-        """
-        array = array.flatten().tolist()
-        if isinstance(labels, int):
-            return array.count(labels)
-        elif len(labels) == 1:
-            return array.count(labels[0])
-        else:
-            counts = []
-            for i in labels:
-                tmp = array.count(i)
-                counts.append(tmp)
-            if sum:
-                return sum(counts)
-            else:
-                return np.asarray(counts)
+            second_counts = np.zeros(len(second_label))  # 初始为0
+            tumor_x, tumor_y = np.where(submap == tumor_label)
+            for x_, y_ in zip(tumor_x, tumor_y):
+                s_submap = get_submap((x_, y_), second_kernel_size, submap)
+                if s_submap is not None:
+                    # 这里判断条件好奇怪  为什么需要取%
+                    # !!!!!!!!!!!!!!!!!!!!!!! why  x_ % second_kernel_size[0] == 0 !!!!!!!!!!!!!!!!!!!!!!!
+                    if x_ % second_kernel_size[0] == 0:
+                        second_counts += _count(second_label, s_submap)
+            # add (counts,proporation) to list
+            second.append(second_counts,second_counts / sum_interest_counts)  # 为什么除
+        return np.asarray(first), np.asarray(second)
 
     def score(self, array, percent=90):
         if len(array) == 0:
-            return (-1, -1), [-1]*len(self.names)
+            return (-1, -1), [-1] * len(self.names)
         score = np.percentile(array, percent, axis=0)
         return array.shape, score
 
@@ -253,7 +254,7 @@ class ClassmapStatistic(object):
     def calc_distance(self,
                       tumor_mask,
                       thres,
-                      interest_label,
+                      first_label,
                       tumor_label,
                       ratio=False):
         '''far, around, inside
@@ -263,61 +264,29 @@ class ClassmapStatistic(object):
                                        cv2.CHAIN_APPROX_SIMPLE)
 
         if len(contours) > 0:
-            distance = [[] for i in range(len(interest_label))]
+            distance = [[] for i in range(len(first_label))]
             for i in range(self.h):
                 for j in range(self.w):
                     c = self.cls_map[i, j]
-                    if c in interest_label:
+                    if c in first_label:
                         temp = max([
                             cv2.pointPolygonTest(cnt, (i, j), True)
                             for cnt in contours
                         ])
-                        idx = interest_label.index(c)
+                        idx = first_label.index(c)
                         distance[idx].append(temp)
             for i, dis in enumerate(distance):
-                tmp = self.distance_sort(np.asarray(dis), thres)
+                tmp = group_count(np.asarray(dis), thres)
                 distance[i] = tmp
             self.distance = np.asarray(distance)
 
             if ratio is True:
-                num_tumor = self._count(tumor_label, self.cls_map)
+                num_tumor = _count(tumor_label, self.cls_map)
                 self.distance_ratio = self.distance / num_tumor
 
         else:
-            self.distance = np.zeros((len(self.names), 3))-1
-            self.distance_ratio = np.zeros((len(self.names), 3))-1
+            self.distance = np.zeros((len(self.names), 3)) - 1
+            self.distance_ratio = np.zeros((len(self.names), 3)) - 1
 
-    def distance_sort(self, array, thres=-20):
-        if len(array) == 0:
-            return [-1, -1, -1]
-        else:
-            far = np.sum(array < thres)
-            inside = np.sum(array > 0)
-            around = len(array.flatten()) - far - inside
-            return [far, around, inside]
-
-    def ratios(self, top, down, array):
-        """top = [1,2,3], down = [1,3,5],计算数组中 1,2,3 占sum(1,3,5)的比例
-        分别计算top中每个label的数量，与占down的总和相除
-
-        Args:
-            top ([type]): [description]
-            down ([type]): [description]
-            array ([type]): [description]
-
-        Returns:
-            [type]: [description]
-        """
-        a = self._count(top, array)
-        b = self._count(down, array, True)
-        return a / b
-
-    def _submap(self, center, sub_size):
-        top, bottom, = center[0] - int(sub_size[0] / 2), center[0] + int(
-            (sub_size[0] + 1) / 2),
-        left, right = center[1] - int(sub_size[1] / 2), center[1] + int(
-            (sub_size[1] + 1) / 2)
-        if top > 0 and bottom < self.h and left > 0 and right < self.w:
-            return self.cls_map[top:bottom, left:right]
-        else:
-            return None
+    def ratios(self, top, down):
+        return _ratios(top, down, self.cls_map)
