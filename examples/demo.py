@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-11-11 15:38:40
+LastEditTime: 2020-12-07 20:01:38
 '''
 
 import numpy as np
@@ -27,41 +27,42 @@ if __name__ == '__main__':
     colors = None  # use default color, a lsit of tuples
     SHOW = True  # to show imgs in processing stage
 
-    statis = ClassmapStatistic(cls_map,
-                               labels,
-                               names,
-                               colors=colors,
-                               show=SHOW,
-                               seed=0)
-    interest, interation = statis.proportion(
-        tumor_label=tumor_label,
-        interest_label=range(1, 8),
-        interaction_label=[2, 4],
-        submap_size=(10, 10),
-        sample_fraction=0.5,
-    )
-    statis.save_img(save_path=None)  # path is Noe, we donot save
-    print('interest.shape: ', interest.shape)
-    print('interation.shape: ', interation.shape)
-    interest_score = statis.score(interest)
-    interation_score = statis.score(interation)
-    print(
-        f'interest_score: {interest_score}\ninteration_score: {interation_score}'
-    )
+# wait test
+# statis = ClassmapStatistic(cls_map,
+#                            labels,
+#                            names,
+#                            colors=colors,
+#                            show=SHOW,
+#                            seed=0)
+# interest, interation = statis.proportion(
+#     tumor_label=tumor_label,
+#     interest_label=range(1, 8),
+#     interaction_label=[2, 4],
+#     submap_size=(10, 10),
+#     sample_fraction=0.5,
+# )
+# statis.save_img(save_path=None)  # path is Noe, we donot save
+# print('interest.shape: ', interest.shape)
+# print('interation.shape: ', interation.shape)
+# interest_score = statis.score(interest)
+# interation_score = statis.score(interation)
+# print(
+#     f'interest_score: {interest_score}\ninteration_score: {interation_score}'
+# )
 
-    score_ = interest_score[[0, 1, 3]]  #选取labels[0, 1, 3]对应的类别 用于计算entropy
-    entropy_ = statis.entropy(score_)
-    print(f'entropy_: {entropy_}')
+# score_ = interest_score[[0, 1, 3]]  #选取labels[0, 1, 3]对应的类别 用于计算entropy
+# entropy_ = statis.entropy(score_)
+# print(f'entropy_: {entropy_}')
 
-    tumor_mask = statis.tumor_mask_preprocess(tumor_label=tumor_label,
-                                              disk=8,
-                                              small_object=50)
+# tumor_mask = statis.tumor_mask_preprocess(tumor_label=tumor_label,
+#                                           disk=8,
+#                                           small_object=50)
 
-    statis.calc_distance(tumor_mask,
-                         thres=-20,
-                         interest_label=[0, 1, 3],
-                         tumor_label=tumor_label,
-                         ratio=True)  # far around inside 个数 ，以及 与肿瘤个数的比例
-    print(
-        f'distance: {statis.distance} \n\n ration_to_tumor: {statis.distance_ratio}'
-    )
+# statis.calc_distance(tumor_mask,
+#                      thres=-20,
+#                      interest_label=[0, 1, 3],
+#                      tumor_label=tumor_label,
+#                      ratio=True)  # far around inside 个数 ，以及 与肿瘤个数的比例
+# print(
+#     f'distance: {statis.distance} \n\n ration_to_tumor: {statis.distance_ratio}'
+# )
