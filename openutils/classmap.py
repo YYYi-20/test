@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: Yuni
 LastEditors: XRZHANG
-LastEditTime: 2020-12-07 19:59:25
+LastEditTime: 2020-12-09 18:35:23
 '''
 
 import os
@@ -206,7 +206,8 @@ class ClassmapStatistic(object):
             # make sure the proporation of tumor  in submap is in threshold
             # if tumor counts in threshold, add result to list
             # add (counts,proporation) to list
-            first.append(interest_counts,interest_counts / sum_interest_counts))
+            first.append(
+                (interest_counts, interest_counts / sum_interest_counts))
 
             second_counts = np.zeros(len(second_label))  # 初始为0
             tumor_x, tumor_y = np.where(submap == tumor_label)
@@ -218,7 +219,8 @@ class ClassmapStatistic(object):
                     if x_ % second_kernel_size[0] == 0:
                         second_counts += _count(second_label, s_submap)
             # add (counts,proporation) to list
-            second.append(second_counts,second_counts / sum_interest_counts)  # 为什么除
+            second.append(
+                (second_counts, second_counts / sum_interest_counts))  # 为什么除
         return np.asarray(first), np.asarray(second)
 
     def score(self, array, percent=90):
