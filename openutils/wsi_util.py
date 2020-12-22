@@ -3,25 +3,28 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-03 15:19:41
+LastEditTime: 2020-12-22 20:35:42
 '''
 '''
 This is a Dataset generator for slide images.
 '''
-from collections import defaultdict
 import json
 import logging
+import re
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
+import cv2
 from openslide import ImageSlide, OpenSlide, deepzoom
 from openslide.lowlevel import OpenSlideUnsupportedFormatError
 from torch.utils.data import Dataset
+from PIL import Image
 
 from .image_utli import *
 from .normalize_staining import normalize_staining
-from .utils import dump_json
+from .utils import dump_json, load_json
 
 
 def open_slide(filename):
@@ -29,12 +32,15 @@ def open_slide(filename):
 
     Return an OpenSlide object for whole-slide images and an ImageSlide
     object for other types of images."""
-    if isinstance(filename, Path):
-        filename = str(filename)
-    try:
-        return OpenSlide(filename)
-    except OpenSlideUnsupportedFormatError:
+    if isinstance(filename, Image.Image):
         return ImageSlide(filename)
+    else:
+        if isinstance(filename, Path):
+            filename = str(filename)
+        try:
+            return OpenSlide(filename)
+        except OpenSlideUnsupportedFormatError:
+            return ImageSlide(filename)
 
 
 class WsiDataSet(Dataset):
@@ -76,9 +82,9 @@ class WsiDataSet(Dataset):
         mpp_x = float(self._properties['openslide.mpp-x'])
         mpp_y = float(self._properties['openslide.mpp-y'])
         mpp = (mpp_x + mpp_y) / 2
-        levels = np.asarray([1, 2, 3, 4, 5])
-        self.level = np.abs(np.subtract(levels * mpp,
-                                        self.resolution)).argmin()
+        # level_downsamples = (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0)
+        mpps = np.asarray(self.slide.level_downsamples) * mpp
+        self.level = np.abs(mpps - self.resolution).argmin()
         if not self.level == 1:
             logging.warn(f'mpp={mpp_x}, so we use L{self.level}')
 
@@ -128,31 +134,206 @@ class WsiDataSet(Dataset):
         logging.info(f'finished tiling and normalizing to -> {out_dir}')
 
 
-class XmlFormater(object):
+class LabeledTile():
+    def __init__(self, slide, tile_size, resolution, number=None):
+        self.slide = slide
+        self.tile_size = tile_size
+        self.resolution = resolution
+        self._properties = dict(self.slide.properties)
+        self.number = number
+        self._properties = dict(self.slide.properties)
+        self._preprocess()
+        self._bg_color = '#' + self.slide.properties.get(
+            'openslide.background-color', 'ffffff')
+
+    @property
+    def property(self):
+        return self._property
+
+    def _preprocess(self):
+        mpp_x = float(self._properties['openslide.mpp-x'])
+        mpp_y = float(self._properties['openslide.mpp-y'])
+        mpp = (mpp_x + mpp_y) / 2
+        # level_downsamples = (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0)
+        mpps = np.asarray(self.slide.level_downsamples) * mpp
+        self.level = np.abs(mpps - self.resolution).argmin()
+        if not self.level == 1:
+            logging.warn(f'mpp={mpp_x}, so we use L{self.level}')
+
+    def get_mask(self,
+                 dicts,
+                 metadata=dict(
+                     zip(['Tumor', 'Fiber', 'Lymp', 'Folli'], [1, 2, 3, 4])),
+                 mask_level=6):
+        w, h = self.slide.level_dimensions[mask_level]
+        mask = np.zeros((h, w))  # cv2 size is w*h
+        # get the factor of level * e.g. level 6 is 2^6
+        factor = self.slide.level_downsamples[mask_level]
+        # the init mask, and all the value is 0, cv2 shape is w*h
+        for group, annotations in dicts.items():
+            label = metadata[group]
+            for anno in annotations:
+                # plot a polygon
+                vertices = np.array(anno["vertices"]) / factor
+                vertices = vertices.astype('int64')
+                cv2.fillPoly(mask, [vertices], (label))
+        return mask.astype('int64')
+
+    def save_tile(self, mask, mask_level, out_dir, bw_thres=230, bw_ratio=0.5):
+        mask_factor = self.slide.level_downsamples[mask_level]
+        tile_factor = self.slide.level_downsamples[self.level]
+        for label in np.unique(mask):
+            if label == 0:
+                continue
+            X_idcs, Y_idcs = np.where(mask == label)
+            coord = np.c_[X_idcs, Y_idcs]  #shape is sample * 2
+            mask_area_lvel_0 = len(X_idcs) * mask_factor
+            tile_size_lvel_0 = self.tile_size * tile_factor
+            if self.number is None:
+                self.number = int(mask_area_lvel_0 / (tile_size_lvel_0**2) *
+                                  10)
+                # mask 面积 除以 tile面积，得到 tile个数，但是多采样10倍数
+            if len(X_idcs) > self.number:
+                sampled_index = np.random.randint(0,
+                                                  len(X_idcs),
+                                                  size=self.number)
+                coord = coord[sampled_index, :]
+
+            #  level 0下 采样点中心坐标
+            coord_level_0 = (coord * mask_factor).astype('int64')
+            # level 0 左上角坐标
+            coord_level_0 = (coord_level_0 -
+                             tile_size_lvel_0 / 2).astype('int64')
+
+            for i in range(len(coord_level_0)):
+                x, y = coord_level_0[i, 0], coord_level_0[i, 1]
+                tile = self.slide.read_region((x, y), self.level,
+                                              (self.tile_size, self.tile_size))
+                # Apply on solid background
+                # copy this from deepzoom
+                bg = Image.new('RGB', tile.size, self._bg_color)
+                tile = Image.composite(tile, bg, tile)
+
+                if tile.size != (self.tile_size, self.tile_size):
+                    # drop bounded tiles
+                    continue
+
+                gray = pil_to_np(tile.convert('L'))
+                bw = np.where(gray < bw_thres, 0, 1)
+                if np.average(bw) < bw_ratio:
+                    try:
+                        normalize_staining(
+                            pil_to_np(tile),
+                            Path(out_dir) / f'{label}_{x}_{y}.jpeg')
+                    except:
+                        logging.info('color normalize error')
+
+
+class AnnotationFormater():
     """
     Format converter e.g. CAMELYON16 to internal json
     """
-    def caseview2json(self,
-                      inxml='../tmp/19-00918 B2_Annotations.xml',
-                      outjson='../tmp/19-00918 B2_Annotations.json'):
+    def load_qu(self, json_name='temp/19-00918%20B2.json'):
+        allobjects = load_json(json_name)
+        names = []
+        coords = []
+        i = 0
+        for obj in allobjects:
+            class_name = obj['properties'].get('classification',
+                                               'nan').get('name', 'nan')
+            names.append(class_name)
+            coords.append(obj['geometry']['coordinates'][0])
+        return names, coords
+
+    def export_qu(self, names, coords, out_json, color_dict=None):
+        if color_dict is None:
+            color_dict = {'Tumor': -3670016, 'Stroma': -6895466}
+        result = []
+        for name, coord in zip(names, coords):
+            tmp = {
+                'type': 'Feature',
+                'id': 'PathAnnotationObject',
+                'geometry': {
+                    'type': 'Polygon',
+                    'coordinates': []
+                },
+                'properties': {
+                    'classification': {
+                        'name': 'nan',
+                        'colorRGB': -3670016
+                    },
+                    'isLocked': False,
+                    'measurements': []
+                }
+            }
+            tmp['geometry']['coordinates'].append(coord)
+            tmp['properties']['classification']['name'] = name
+            result.append(tmp)
+        if out_json is not None:
+            dump_json(result, out_json)
+        else:
+            return result
+
+    def caseview2asap(self, inxml, outxml):
+        tmp = 'tmp.json'
+        self._caseview2json(inxml, tmp)
+        self._json2asap(tmp, outxml)
+
+    def caseview2qupath(self, offset, inxml, outjson=None, color_dict=None):
         root = ET.parse(inxml).getroot()
-        annotations = root.findall('destination/annotations/annotation')
+        annotations = root.findall('./destination/annotations/annotation')
+        result = []
+        offset_x, offset_y = offset
+        for anno in annotations:
+            tmp = {
+                'type': 'Feature',
+                'id': 'PathAnnotationObject',
+                'geometry': {
+                    'type': 'Polygon',
+                    'coordinates': []
+                },
+                'properties': {
+                    'classification': {
+                        'name': 'nan',
+                        'colorRGB': -3670016
+                    },
+                    'isLocked': False,
+                    'measurements': []
+                }
+            }
+            name = anno.get('name')
+            points = [(int(p.get('x')) - offset_x, int(p.get('y')) - offset_y)
+                      for p in anno.findall('p')]
+            tmp['geometry']['coordinates'].append(points)
+            tmp['properties']['classification']['name'] = name
+            if color_dict is not None:
+                tmp['properties']['classification']['colorRGB'] = color_dict[
+                    name]
+            result.append(tmp)
+        if outjson != None:
+            dump_json(result, outjson)
+        else:
+            return result
+
+    def _caseview2json(self, inxml, outjson=None):
+        root = ET.parse(inxml).getroot()
+        annotations = root.findall('./destination/annotations/annotation')
         polys = defaultdict(list)
         for anno in annotations:
             name = anno.get('name')
+            group = re.findall(r'[a-zA-Z]+', name)[-1]
+            if not group in ['Tumor', 'Folli', 'Lymp', 'Fiber']:
+                continue
             points = [(int(p.get('x')), int(p.get('y')))
                       for p in anno.findall('p')]
-            tmp = {'name': name, 'vertices': points}
-            polys[name[-2:]].append(tmp)
-        dump_json(polys, outjson)
+            tmp = {'name': re.findall(r'[0-9]+', name)[-1], 'vertices': points}
+            polys[group].append(tmp)
+        if outjson is not None:
+            dump_json(polys, outjson)
+        else:
+            return polys
 
-    def caseview2asap(self,
-                      inxml='../tmp/19-00918 B2_Annotations.xml',
-                      outxml='../tmp/19-00918 B2_Annotations_asap.json'):
-        self._caseview2json(inxml)
-        polys = self.polys
-
-    def camelyon16xml2json(self, inxml, outjson):
+    def _asap2json(self, inxml, outjson):
         """
         Convert an annotation of camelyon16 xml format into a json format.
         Arguments:
@@ -201,13 +382,12 @@ class XmlFormater(object):
         with open(outjson, 'w') as f:
             json.dump(json_dict, f, indent=1)
 
-    def json2camelyon16xml(self,
-                           dict,
-                           xml_path,
-                           group_color=[
-                               '#d0021b', '#F4FA58', '#bd10e0', '#f5a623',
-                               '#234df5'
-                           ]):
+    def _json2asap(self,
+                   dict,
+                   xml_path,
+                   group_color=[
+                       '#d0021b', '#F4FA58', '#bd10e0', '#f5a623', '#234df5'
+                   ]):
 
         group = ["_" + str(i) for i in range(len(group_color))]
         group_keys = dict.keys()
@@ -230,7 +410,7 @@ class XmlFormater(object):
         tree = ET.ElementTree(root)
         tree.write(xml_path)
 
-    def partofgroup(father_node, group_color):
+    def partofgroup(self, father_node, group_color):
 
         cor = group_color
         for i in range(len(group_color)):
@@ -242,7 +422,7 @@ class XmlFormater(object):
             }
             ET.SubElement(title, "Attributes")
 
-    def plot_area(father_node, all_area, group_, cor_):
+    def plot_area(self, father_node, all_area, group_, cor_):
 
         for i in range(len(all_area)):
             # print(all_area)
