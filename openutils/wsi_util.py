@@ -3,44 +3,37 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-22 20:35:42
+LastEditTime: 2020-12-23 14:07:51
 '''
 '''
 This is a Dataset generator for slide images.
 '''
 import json
 import logging
-import re
-import xml.etree.ElementTree as ET
-from collections import defaultdict
+import math
 from pathlib import Path
 
-import numpy as np
 import cv2
+import numpy as np
 from openslide import ImageSlide, OpenSlide, deepzoom
-from openslide.lowlevel import OpenSlideUnsupportedFormatError
-from torch.utils.data import Dataset
 from PIL import Image
+from torch.utils.data import Dataset
 
 from .image_utli import *
 from .normalize_staining import normalize_staining
-from .utils import dump_json, load_json
+from .utils import dump_json
 
 
-def open_slide(filename):
-    """Open a whole-slide or regular image.
+def open_slide(filename, image=False):
+    """Open a whole-slide image filenmae, PIL filename/object.
 
-    Return an OpenSlide object for whole-slide images and an ImageSlide
-    object for other types of images."""
-    if isinstance(filename, Image.Image):
+    Return an OpenSlide object for whole-slide or PIL images."""
+    if isinstance(filename, Path):
+        filename = filename.__fspath__()
+    if image:
         return ImageSlide(filename)
     else:
-        if isinstance(filename, Path):
-            filename = str(filename)
-        try:
-            return OpenSlide(filename)
-        except OpenSlideUnsupportedFormatError:
-            return ImageSlide(filename)
+        return OpenSlide(filename)
 
 
 class WsiDataSet(Dataset):
@@ -229,217 +222,137 @@ class LabeledTile():
                         logging.info('color normalize error')
 
 
-class AnnotationFormater():
-    """
-    Format converter e.g. CAMELYON16 to internal json
-    """
-    def load_qu(self, json_name='temp/19-00918%20B2.json'):
-        allobjects = load_json(json_name)
-        names = []
-        coords = []
-        i = 0
-        for obj in allobjects:
-            class_name = obj['properties'].get('classification',
-                                               'nan').get('name', 'nan')
-            names.append(class_name)
-            coords.append(obj['geometry']['coordinates'][0])
-        return names, coords
+class TrainZoomGenerator():
+    #  必须方形
+    def __init__(self,
+                 slide,
+                 tile_size,
+                 stride_size,
+                 resolution,
+                 limit_bounds=True):
+        self.slide = slide
+        self.tile_size = tile_size
+        if stride_size is None:
+            stride_size = tile_size  # int
+        self.stride_size = stride_size  # must int
+        self.resolution = resolution
+        self.limit_bounds = limit_bounds
+        self._properties = dict(self.slide.properties)
+        self._bg_color = '#' + slide.properties['openslide.background-color']
 
-    def export_qu(self, names, coords, out_json, color_dict=None):
-        if color_dict is None:
-            color_dict = {'Tumor': -3670016, 'Stroma': -6895466}
-        result = []
-        for name, coord in zip(names, coords):
-            tmp = {
-                'type': 'Feature',
-                'id': 'PathAnnotationObject',
-                'geometry': {
-                    'type': 'Polygon',
-                    'coordinates': []
-                },
-                'properties': {
-                    'classification': {
-                        'name': 'nan',
-                        'colorRGB': -3670016
-                    },
-                    'isLocked': False,
-                    'measurements': []
-                }
-            }
-            tmp['geometry']['coordinates'].append(coord)
-            tmp['properties']['classification']['name'] = name
-            result.append(tmp)
-        if out_json is not None:
-            dump_json(result, out_json)
-        else:
-            return result
+        mpp_x = float(slide.properties['openslide.mpp-x'])
+        mpp_y = float(slide.properties['openslide.mpp-y'])
+        mpp = (mpp_x + mpp_y) / 2
+        # level_downsamples = (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0)
+        mpps = np.asarray(slide.level_downsamples) * mpp
+        self.level = np.abs(mpps - self.resolution).argmin()
+        logging.info(f'mpp={mpp}, so we use L{self.level}')
+        self.tile_scale_factor = int(slide.level_downsamples[self.level])
+        self.mask_scale_factor = int(self.tile_scale_factor * stride_size)
 
-    def caseview2asap(self, inxml, outxml):
-        tmp = 'tmp.json'
-        self._caseview2json(inxml, tmp)
-        self._json2asap(tmp, outxml)
+        self._l0_offset = (0, 0)
+        self._l0_dimensions = slide.dimensions
+        if limit_bounds:
+            self._l0_offset = tuple(
+                int(slide.properties[prop])
+                for prop in ('openslide.bounds-x', 'openslide.bounds-y'))
+            self._l0_dimensions = tuple(
+                int(slide.properties[prop])
+                for prop in ('openslide.bounds-width',
+                             'openslide.bounds-height'))
+        self._l0_size = int(self.tile_scale_factor * tile_size)
+        # self._l0_stride_size = int(self.tile_scale_factor * stride_size)
 
-    def caseview2qupath(self, offset, inxml, outjson=None, color_dict=None):
-        root = ET.parse(inxml).getroot()
-        annotations = root.findall('./destination/annotations/annotation')
-        result = []
-        offset_x, offset_y = offset
-        for anno in annotations:
-            tmp = {
-                'type': 'Feature',
-                'id': 'PathAnnotationObject',
-                'geometry': {
-                    'type': 'Polygon',
-                    'coordinates': []
-                },
-                'properties': {
-                    'classification': {
-                        'name': 'nan',
-                        'colorRGB': -3670016
-                    },
-                    'isLocked': False,
-                    'measurements': []
-                }
-            }
-            name = anno.get('name')
-            points = [(int(p.get('x')) - offset_x, int(p.get('y')) - offset_y)
-                      for p in anno.findall('p')]
-            tmp['geometry']['coordinates'].append(points)
-            tmp['properties']['classification']['name'] = name
-            if color_dict is not None:
-                tmp['properties']['classification']['colorRGB'] = color_dict[
-                    name]
-            result.append(tmp)
-        if outjson != None:
-            dump_json(result, outjson)
-        else:
-            return result
+        self._mask_offset = tuple(
+            int(i / self.mask_scale_factor) for i in self._l0_offset)
+        self._mask_dimensions = tuple(
+            math.ceil(i / self.mask_scale_factor) for i in self._l0_dimensions)
+        self._mask_size = int(self._l0_size / self.mask_scale_factor)
+        # self._mask_stride_size = 1
 
-    def _caseview2json(self, inxml, outjson=None):
-        root = ET.parse(inxml).getroot()
-        annotations = root.findall('./destination/annotations/annotation')
-        polys = defaultdict(list)
-        for anno in annotations:
-            name = anno.get('name')
-            group = re.findall(r'[a-zA-Z]+', name)[-1]
-            if not group in ['Tumor', 'Folli', 'Lymp', 'Fiber']:
-                continue
-            points = [(int(p.get('x')), int(p.get('y')))
-                      for p in anno.findall('p')]
-            tmp = {'name': re.findall(r'[0-9]+', name)[-1], 'vertices': points}
-            polys[group].append(tmp)
-        if outjson is not None:
-            dump_json(polys, outjson)
-        else:
-            return polys
+    @property
+    def property(self):
+        return self._property
 
-    def _asap2json(self, inxml, outjson):
+    def generate_mask(self,
+                      names_coords,
+                      name_label=dict(
+                          zip(['Tumor', 'Fiber', 'Lymp', 'Folli'],
+                              [1, 2, 3, 4]))):
+        """names_coords are zip object. Coordation must be 2-D list or ndarray like [[w1,h1],[w2,h2],[w3,h3]].
+
+        Args:
+            names_coords ([type]): [description]
+            name_label ([type], optional): [description]. Defaults to dict( zip(['Tumor', 'Fiber', 'Lymp', 'Folli'], [1, 2, 3, 4])).
+
+        Returns:
+            [type]: [description]
         """
-        Convert an annotation of camelyon16 xml format into a json format.
-        Arguments:
-            inxml: string, path to the input camelyon16 xml format
-            outjson: string, path to the output json format
+        w, h = tuple(
+            math.ceil(i / self.mask_scale_factor)
+            for i in self.slide.dimensions)
+        mask = np.zeros((h, w)).astype('uint8')
+        # the init mask, and all the value is 0, cv2 shape is w*h
+        for classname, coord in names_coords:
+            label = name_label.get(classname, default=0)
+            # plot a polygon
+            # (w,h)坐标列表
+            vertices = (np.asarray(coord) /
+                        self.mask_scale_factor).astype('int64')
+            cv2.fillPoly(mask, [vertices], (label))
+
+        self.mask = mask
+        if self.limit_bounds:
+            w_, h_ = self._mask_offset
+            w, h = self._mask_dimensions
+            self.mask = mask[h_:h_ + h, w_:w_ + w]
+            shape = self.mask.shape
+            if shape != (h, w):
+                row_num, col_num = max(h - shape[0], 0), max(w - shape[1], 0)
+                self.mask = np.pad(self.mask, ((0, row_num), (0, col_num)),
+                                   'constant',
+                                   constant_values=0)
+        return self.mask
+
+    def get_tile(self, address):
+        """Get the (w,h) tile.
+
+        Args:
+            address ([type]): [description]
+
+        Returns:
+            [type]: [description]
         """
-        root = ET.parse(inxml).getroot()
-        annotations_tumor = \
-            root.findall('./Annotations/Annotation[@PartOfGroup="Tumor"]')
-        annotations_0 = \
-            root.findall('./Annotations/Annotation[@PartOfGroup="_0"]')
-        annotations_1 = \
-            root.findall('./Annotations/Annotation[@PartOfGroup="_1"]')
-        annotations_2 = \
-            root.findall('./Annotations/Annotation[@PartOfGroup="_2"]')
-        annotations_positive = \
-            annotations_tumor + annotations_0 + annotations_1
-        annotations_negative = annotations_2
+        w, h = address
+        tile_mask = self.mask[h:h + self._mask_size, w:w + self._mask_size]
+        w = w * self.mask_scale_factor + self._l0_offset[0]
+        h = h * self.mask_scale_factor + self._l0_offset[1]
+        size = (self.tile_size, self.tile_size)
+        tile = self.slide.read_region((w, h), self.level, size)
+        bg = Image.new('RGB', tile.size, self._bg_color)
+        tile = Image.composite(tile, bg, tile)
+        return tile_mask, tile
 
-        json_dict = {}
-        json_dict['positive'] = []
-        json_dict['negative'] = []
-
-        for annotation in annotations_positive:
-            X = list(
-                map(lambda x: float(x.get('X')),
-                    annotation.findall('./Coordinates/Coordinate')))
-            Y = list(
-                map(lambda x: float(x.get('Y')),
-                    annotation.findall('./Coordinates/Coordinate')))
-            vertices = np.round([X, Y]).astype(int).transpose().tolist()
-            name = annotation.attrib['Name']
-            json_dict['positive'].append({'name': name, 'vertices': vertices})
-
-        for annotation in annotations_negative:
-            X = list(
-                map(lambda x: float(x.get('X')),
-                    annotation.findall('./Coordinates/Coordinate')))
-            Y = list(
-                map(lambda x: float(x.get('Y')),
-                    annotation.findall('./Coordinates/Coordinate')))
-            vertices = np.round([X, Y]).astype(int).transpose().tolist()
-            name = annotation.attrib['Name']
-            json_dict['negative'].append({'name': name, 'vertices': vertices})
-
-        with open(outjson, 'w') as f:
-            json.dump(json_dict, f, indent=1)
-
-    def _json2asap(self,
-                   dict,
-                   xml_path,
-                   group_color=[
-                       '#d0021b', '#F4FA58', '#bd10e0', '#f5a623', '#234df5'
-                   ]):
-
-        group = ["_" + str(i) for i in range(len(group_color))]
-        group_keys = dict.keys()
-
-        assert len(group_keys) == len(group_color)
-        # root and its two sub element
-        root = ET.Element('ASAP_Annotations')
-        sub_01 = ET.SubElement(root, "Annotations")
-        sub_02 = ET.SubElement(root, "AnnotationGroups")
-
-        # part of group. e.g. 2 color -- 2 part
-        self.partofgroup(sub_02, group_color)
-
-        # for vertices
-        for i, key in enumerate(group_keys):
-            group_ = group[i]
-            cor_ = group_color[i]
-            self.plot_area(sub_01, dict[key], group_, cor_)
-
-        tree = ET.ElementTree(root)
-        tree.write(xml_path)
-
-    def partofgroup(self, father_node, group_color):
-
-        cor = group_color
-        for i in range(len(group_color)):
-            title = ET.SubElement(father_node, "Group")
-            title.attrib = {
-                "Color": cor[i],
-                "PartOfGroup": "None",
-                "Name": "_" + str(i)
-            }
-            ET.SubElement(title, "Attributes")
-
-    def plot_area(self, father_node, all_area, group_, cor_):
-
-        for i in range(len(all_area)):
-            # print(all_area)
-            dict_ = all_area[i]
-            title = ET.SubElement(father_node, "Annotation")
-            title.attrib = {
-                "Color": cor_,
-                "PartOfGroup": group_,
-                "Type": "Polygon",
-                "Name": "_" + str(i)
-            }
-
-            coordinates = ET.SubElement(title, "Coordinates")
-            dict_point = dict_["vertices"]  # all vertices of the i area
-
-            for j in range(len(dict_point)):
-                X = dict_point[j][0]
-                Y = dict_point[j][1]
-                coordinate = ET.SubElement(coordinates, "Coordinate")
-                coordinate.attrib = {"Y": str(Y), "X": str(X), "Order": str(j)}
+    def save_all_tiles(self,
+                       out_dir,
+                       bw_thres=230,
+                       bw_ratio=0.5,
+                       mask_ratio=0.5):
+        w_, h_ = self._mask_dimensions
+        w_idxs, h_idxs = np.meshgrid(range(w_ - self._mask_size),
+                                     range(h_ - self._mask_size))
+        for w, h in zip(w_idxs, h_idxs):
+            tile_mask, tile = self.get_tile((w, h))
+            fractions = np.bincount(tile_mask.flatten()) / tile_mask.size
+            label = np.argmax(fractions)
+            if label != 0 and fractions[label] > mask_ratio:
+                assert tile.size == (self.tile_size, self.tile_size)
+                gray = pil_to_np(tile.convert('L'))
+                bw = np.where(gray < bw_thres, 0, 1)
+                if np.average(bw) < bw_ratio:
+                    try:
+                        normalize_staining(
+                            pil_to_np(tile),
+                            Path(out_dir) / label / f'w{w}_h{h}.jpeg')
+                    except:
+                        logging.info('color normalize error')
