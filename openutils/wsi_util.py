@@ -3,12 +3,11 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-23 14:07:51
+LastEditTime: 2020-12-23 14:08:46
 '''
 '''
 This is a Dataset generator for slide images.
 '''
-import json
 import logging
 import math
 from pathlib import Path

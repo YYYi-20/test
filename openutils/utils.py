@@ -3,25 +3,25 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-03 17:38:13
+LastEditTime: 2020-12-23 14:26:29
 '''
 import json
 import os
 from operator import itemgetter
 
 
-def load_json(filenmae):
+def load_json(filenmae, **kwargs):
     try:
         with open(filenmae, 'r') as f:
-            return json.load(fp=f)
+            return json.load(fp=f, **kwargs)
     except:
         print('error in loading json')
 
 
-def dump_json(dict, filename):
+def dump_json(dict, filename, **kwargs):
     try:
         with open(filename, 'w') as f:
-            json.dump(dict, f)
+            json.dump(dict, f, **kwargs)
     except:
         print('error in saving json')
 

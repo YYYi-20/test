@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 import xml.etree.ElementTree as ET
@@ -193,9 +192,7 @@ class AnnotationTranformer():
             vertices = np.round([X, Y]).astype(int).transpose().tolist()
             name = annotation.attrib['Name']
             json_dict['negative'].append({'name': name, 'vertices': vertices})
-
-        with open(outjson, 'w') as f:
-            json.dump(json_dict, f, indent=1)
+        dump_json(json_dict, outjson, indent=1)
 
     def _json2asap(self,
                    dict,

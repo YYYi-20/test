@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-02 19:16:11
+LastEditTime: 2020-12-23 14:30:12
 '''
 #
 # openutils - Python utils for the whole slide image
@@ -25,3 +25,4 @@ from .torch_util import *
 from .classmap import *
 from .signal_util import *
 from .utils import *
+from .annotationtranformer import *
