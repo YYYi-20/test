@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-23 14:08:46
+LastEditTime: 2020-12-23 23:32:19
 '''
 '''
 This is a Dataset generator for slide images.
@@ -13,6 +13,7 @@ import math
 from pathlib import Path
 
 import cv2
+from collections import defaultdict
 import numpy as np
 from openslide import ImageSlide, OpenSlide, deepzoom
 from PIL import Image
@@ -274,11 +275,11 @@ class TrainZoomGenerator():
         return self._property
 
     def generate_mask(self,
-                      names_coords,
-                      name_label=dict(
-                          zip(['Tumor', 'Fiber', 'Lymp', 'Folli'],
-                              [1, 2, 3, 4]))):
-        """names_coords are zip object. Coordation must be 2-D list or ndarray like [[w1,h1],[w2,h2],[w3,h3]].
+                      anno_names,
+                      anno_coords,
+                      name_label_dict=None,
+                      anno_offset=(0, 0)):
+        """Coordations must be 2-D list or ndarray like [[w1,h1],[w2,h2],[w3,h3]].
 
         Args:
             names_coords ([type]): [description]
@@ -292,13 +293,33 @@ class TrainZoomGenerator():
             for i in self.slide.dimensions)
         mask = np.zeros((h, w)).astype('uint8')
         # the init mask, and all the value is 0, cv2 shape is w*h
-        for classname, coord in names_coords:
-            label = name_label.get(classname, default=0)
-            # plot a polygon
-            # (w,h)坐标列表
-            vertices = (np.asarray(coord) /
-                        self.mask_scale_factor).astype('int64')
-            cv2.fillPoly(mask, [vertices], (label))
+        annotations = defaultdict(list)
+        for name, coord in zip(anno_names, anno_coords):
+            annotations[name].append(coord)
+
+        name_label = sorted(name_label_dict.items(),
+                            key=lambda x: x[1],
+                            reverse=False)
+        for name, label in name_label:
+            coords = annotations[name]
+            if len(coords) > 0:
+                for coord in coords:
+                    abs_coord = np.asarray(coord) + np.asarray(anno_offset)
+                    mask_coord = (abs_coord /
+                                  self.mask_scale_factor).astype('int64')
+                    cv2.fillPoly(mask, [mask_coord], (label))
+        # k = 1
+        # for name, coord in zip(anno_names, anno_coords):
+        #     if name_label_dict is None:
+        #         label = k
+        #     else:
+        #         label = name_label_dict.get(name, 0)
+        #     # plot a polygon
+        #     # (w,h)坐标列表
+        #     abs_coord = np.asarray(coord) + np.asarray(anno_offset)
+        #     mask_coord = (abs_coord / self.mask_scale_factor).astype('int64')
+        #     cv2.fillPoly(mask, [mask_coord], (label))
+        #     k += 1
 
         self.mask = mask
         if self.limit_bounds:
@@ -340,6 +361,7 @@ class TrainZoomGenerator():
         w_, h_ = self._mask_dimensions
         w_idxs, h_idxs = np.meshgrid(range(w_ - self._mask_size),
                                      range(h_ - self._mask_size))
+        w_idxs, h_idxs = w_idxs.flatten(), h_idxs.flatten()
         for w, h in zip(w_idxs, h_idxs):
             tile_mask, tile = self.get_tile((w, h))
             fractions = np.bincount(tile_mask.flatten()) / tile_mask.size
@@ -352,6 +374,6 @@ class TrainZoomGenerator():
                     try:
                         normalize_staining(
                             pil_to_np(tile),
-                            Path(out_dir) / label / f'w{w}_h{h}.jpeg')
-                    except:
-                        logging.info('color normalize error')
+                            Path(out_dir) / f'l{label}_w{w}_h{h}.jpeg')
+                    except Exception as e:
+                        logging.info('{e}\t color normalize error')

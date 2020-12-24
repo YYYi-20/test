@@ -1,12 +1,13 @@
 import os
 import random
 
+import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
 from PIL import Image
+from torch.utils.data import DataLoader, Dataset
 
 
 def weights_init(model, method='xavier'):
@@ -41,11 +42,6 @@ def weights_init(model, method='xavier'):
 
 
 class TensorDataset(Dataset):
-    """[summary]
-
-    Args:
-        Dataset ([type]): [description]
-    """
     def __init__(self, X, y=None, transforms=None):
         """[summary]
 
@@ -69,6 +65,33 @@ class TensorDataset(Dataset):
             return sample, self.y[index]
         else:
             return sample
+
+
+class ImagePathDataset(Dataset):
+    def __init__(self, paths, labels, loader, transform=None):
+        """[summary]
+
+        Args:
+            paths ([type]): [description]
+            labels ([type]): [description]
+            loader ([type]): [description]
+            transform ([type], optional): [description]. Defaults to None.
+        """
+        self.image_paths = paths
+        self.label = labels
+        self.loader = loader
+        self.transform = transform
+
+    def __getitem__(self, index):
+        image_name = self.image_paths[index]
+        img = self.loader(image_name)
+        if self.transform is not None:
+            img = self.transform(img)
+        label = self.label[index]
+        return img, label
+
+    def __len__(self):
+        return len(self.label)
 
 
 class data_prefetcher():

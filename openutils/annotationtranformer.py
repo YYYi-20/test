@@ -23,9 +23,11 @@ class AnnotationTranformer():
         allobjects = load_json(json_name)
         names = []
         coords = []
+        tmp = {"name": "unknown", "colorRGB": -3670016}
         for obj in allobjects:
-            class_name = obj['properties'].get('classification',
-                                               'nan').get('name', 'nan')
+            class_name = obj.get('properties',
+                                 {}).get('classification',
+                                         {}).get('name', 'unknown')
             names.append(class_name)
             coords.append(obj['geometry']['coordinates'][0])
         return names, coords
@@ -57,10 +59,7 @@ class AnnotationTranformer():
                 'properties': {
                     'classification': {
                         'name': 'nan',
-                        'colorRGB': -3670016
-                    },
-                    'isLocked': False,
-                    'measurements': []
+                    }
                 }
             }
             tmp['geometry']['coordinates'].append(coord)
@@ -102,22 +101,20 @@ class AnnotationTranformer():
                 },
                 'properties': {
                     'classification': {
-                        'name': 'nan',
-                        'colorRGB': -3670016
-                    },
-                    'isLocked': False,
-                    'measurements': []
+                        'name': 'nan'
+                    }
                 }
             }
             name = anno.get('name')
+            name = name[-5:]
             points = [(int(p.get('x')) - offset_x, int(p.get('y')) - offset_y)
                       for p in anno.findall('p')]
             if len(points) == 3:
-                logging.warning(outjson, 'only 3 poitns')
-                logging.warning(anno)
+                logging.info(str(outjson) + 'only 3 poitns')
+                logging.info(str(anno))
                 continue
             if points[0] != points[-1]:
-                logging.warning(outjson, 'start end mismatch')
+                logging.info(str(anno) + 'start end mismatch')
             tmp['geometry']['coordinates'].append(points)
             tmp['properties']['classification']['name'] = name
             if color_dict is not None:
