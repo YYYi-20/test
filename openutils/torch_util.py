@@ -77,11 +77,16 @@ class ImagePathDataset(Dataset):
         self.transform = transform
 
     def __getitem__(self, index):
-        image_name = self.image_paths[index]
-        img = self.loader(image_name)
-        if self.transform is not None:
-            img = self.transform(img)
+        img = self.loader(self.image_paths[index])
         label = self.label[index]
+        if isinstance(self.transform, tuple):
+            if label == 0:
+                img = self.transform[1](img)
+            else:
+                img = self.transform[0](img)
+
+        elif self.transform is not None:
+            img = self.transform(img)
         return img, label
 
     def __len__(self):
