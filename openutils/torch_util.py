@@ -1,13 +1,7 @@
-import os
-import random
-
-import pandas as pd
-import numpy as np
 import torch
 import torch.nn as nn
-import torchvision.transforms as transforms
-from PIL import Image
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
+import logging
 
 
 def weights_init(model, method='xavier'):
@@ -112,27 +106,9 @@ class data_prefetcher():
             self.next_input = None
             self.next_target = None
             return
-        # if record_stream() doesn't work, another option is to make sure device inputs are created
-        # on the main stream.
-        # self.next_input_gpu = torch.empty_like(self.next_input, device='cuda')
-        # self.next_target_gpu = torch.empty_like(self.next_target, device='cuda')
-        # Need to make sure the memory allocated for next_* is not still in use by the main stream
-        # at the time we start copying to next_*:
-        # self.stream.wait_stream(torch.cuda.current_stream())
         with torch.cuda.stream(self.stream):
             self.next_input = self.next_input.cuda(non_blocking=True)
             self.next_target = self.next_target.cuda(non_blocking=True)
-            # more code for the alternative if record_stream() doesn't work:
-            # copy_ will record the use of the pinned source tensor in this side stream.
-            # self.next_input_gpu.copy_(self.next_input, non_blocking=True)
-            # self.next_target_gpu.copy_(self.next_target, non_blocking=True)
-            # self.next_input = self.next_input_gpu
-            # self.next_target = self.next_target_gpu
-
-            # With Amp, it isn't necessary to manually convert data to half.
-            # if args.fp16:
-            #     self.next_input = self.next_input.half()
-            # else:
             self.next_input = self.next_input.float()
             if self.mean is not None and self.std is not None:
                 self.next_input = self.next_input.sub_(self.mean).div_(
@@ -148,3 +124,70 @@ class data_prefetcher():
             target.record_stream(torch.cuda.current_stream())
         self.preload()
         return input, target
+
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self, name, fmt=':f'):
+        self.name = name
+        self.fmt = fmt
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+    def __str__(self):
+        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
+        return fmtstr.format(**self.__dict__)
+
+
+class ProgressMeter(object):
+    def __init__(self, num_batches, meters, prefix=""):
+        self.batch_fmtstr = self._get_batch_fmtstr(num_batches)
+        self.meters = meters
+        self.prefix = prefix
+
+    def display(self, batch):
+        entries = [self.prefix + self.batch_fmtstr.format(batch)]
+        entries += [str(meter) for meter in self.meters]
+        logging.info('\t'.join(entries))
+
+    def _get_batch_fmtstr(self, num_batches):
+        num_digits = len(str(num_batches // 1))
+        fmt = '{:' + str(num_digits) + 'd}'
+        return '[' + fmt + '/' + fmt.format(num_batches) + ']'
+
+
+def accuracy(output, target, topk=(1, )):
+    """Computes the accuracy over the k top predictions for the specified values of k
+    Used for torch tensor as input.
+    Args:
+        output ([type]): [description]
+        target ([type]): [description]
+        topk (tuple, optional): [description]. Defaults to (1, ).
+
+    Returns:
+        list: [description]
+    """
+    with torch.no_grad():
+        maxk = max(topk)
+        batch_size = target.size(0)
+
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+        res = []
+        for k in topk:
+            correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
+            res.append(correct_k.mul_(100.0 / batch_size))
+        return res

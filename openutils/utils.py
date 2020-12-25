@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-24 15:58:48
+LastEditTime: 2020-12-25 16:22:22
 '''
 import logging
 import json
@@ -43,14 +43,15 @@ def is_empty(path):
     return flag
 
 
-def reset_dir(path):
+def reset_dir(path, clear_dir):
     '''
     如果文件夹不存在就创建，如果文件存在就清空！
     :param filepath:需要创建的文件夹路径
     :return:
     '''
-    if not os.path.exists(path):
-        os.mkdir(path)
+    if Path(path).exists():
+        if clear_dir:
+            shutil.rmtree(path)
+            Path(path).mkdir(parents=True)
     else:
-        shutil.rmtree(path)
-        Path(path).mkdir(parents=True)
+        Path(path).mkdir()

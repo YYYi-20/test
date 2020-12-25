@@ -3,11 +3,10 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-05 14:29:02
+LastEditTime: 2020-12-25 14:23:12
 '''
 
 import cv2
-import numpy as np
 import random
 from .image_utli import remove_padding
 import torch
@@ -52,7 +51,7 @@ class Resize():
         return img
 
 
-class ToTensor():
+class RGBArrayToTensor():
     def __call__(self, img):
         img = img.transpose((2, 0, 1))
         tonsor = torch.from_numpy(img)
