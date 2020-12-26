@@ -15,7 +15,7 @@ def normalize_staining(img,
         see test.py
 
     Input:
-        I: RGB input image
+        I: RGB input image shape (h, w, c)
         Io: (optional) transmitted light intensity
 
     Output:

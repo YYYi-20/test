@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-25 16:22:22
+LastEditTime: 2020-12-25 21:28:26
 '''
 import logging
 import json
@@ -53,5 +53,7 @@ def reset_dir(path, clear_dir):
         if clear_dir:
             shutil.rmtree(path)
             Path(path).mkdir(parents=True)
+        else:
+            return
     else:
         Path(path).mkdir()

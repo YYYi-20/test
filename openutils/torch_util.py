@@ -1,7 +1,10 @@
+import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 import logging
+import numpy as np
+import numbers
 
 
 def weights_init(model, method='xavier'):
@@ -129,6 +132,195 @@ class data_prefetcher():
             target.record_stream(torch.cuda.current_stream())
         self.preload()
         return input, target
+
+
+class ConfusionMeter():
+    """Maintains a confusion matrix for a given calssification problem.
+    The ConfusionMeter constructs a confusion matrix for a multi-class
+    classification problems. It does not support multi-label, multi-class problems:
+    for such problems, please use MultiLabelConfusionMeter.
+
+    Args:
+        k (int): number of classes in the classification problem
+        normalized (boolean): Determines whether or not the confusion matrix
+            is normalized or not
+    """
+    def __init__(self, k, normalized=False, label_name=None):
+        self.conf = np.ndarray((k, k), dtype=np.int32)
+        self.normalized = normalized
+        self.k = k
+        self.label_name = label_name
+        self.reset()
+
+    def reset(self):
+        self.conf.fill(0)
+
+    def update(self, predicted, target):
+        """Computes the confusion matrix of K x K size where K is no of classes
+
+        Args:
+            predicted (tensor): Can be an N x K tensor of predicted score btained
+            from the model for N examples and K classes or an N-tensor of integer
+            values between 0 and K-1. 
+            target (tensor): Can be a N-tensor of integer values assumed to be
+            integer values between 0 and K-1 or N x K tensor, where targets are
+            assumed to be provided as one-hot vectors
+        """
+        predicted = predicted.cpu().data.numpy()  #make sure  no grad
+        target = target.cpu().data.numpy()
+
+        assert predicted.shape[0] == target.shape[0], \
+            'number of targets and predicted outputs do not match'
+
+        if np.ndim(predicted) != 1:
+            assert predicted.shape[1] == self.k, \
+                'number of predictions does not match size of confusion matrix'
+            predicted = np.argmax(predicted, 1)
+        else:
+            assert (predicted.max() < self.k) and (predicted.min() >= 0), \
+                'predicted values are not between 1 and k'
+
+        onehot_target = np.ndim(target) != 1
+        if onehot_target:
+            assert target.shape[1] == self.k, \
+                'Onehot target does not match size of confusion matrix'
+            assert (target >= 0).all() and (target <= 1).all(), \
+                'in one-hot encoding, target values should be 0 or 1'
+            assert (target.sum(1) == 1).all(), \
+                'multi-label setting is not supported'
+            target = np.argmax(target, 1)
+        else:
+            assert (predicted.max() < self.k) and (predicted.min() >= 0), \
+                'predicted values are not between 0 and k-1'
+
+        # hack for bincounting 2 arrays together
+        x = predicted + self.k * target
+        bincount_2d = np.bincount(x.astype(np.int32), minlength=self.k**2)
+        assert bincount_2d.size == self.k**2
+        conf = bincount_2d.reshape((self.k, self.k))
+
+        self.conf += conf
+
+    def value(self):
+        """
+        Returns:
+            Confustion matrix of K rows and K columns, where rows corresponds 
+            to ground-truth targets and columns corresponds to predicted targets.
+        """
+        self.p, self.r, self.f1 = confision_to_pre_recall_f1(self.conf)
+        if self.normalized:
+            conf = self.conf.astype(np.float32)
+            return conf / conf.sum(1).clip(min=1e-12)[:, None]
+        else:
+            return self.conf
+
+    def __str__(self):
+        value = self.value()
+        columns = [f'label_{i}' for i in range(self.k)]
+        index = columns + ['pre', 'recall', 'f1']
+        value = np.vstack([value, self.p, self.r, self.f1])
+        result = pd.DataFrame(data=value, index=index, columns=columns)
+        print(result)
+        return '\n' + str(result)
+
+
+def _divide(a, b):
+    return np.divide(a.astype('float32'),
+                     b.astype('float32'),
+                     out=np.zeros_like(a, dtype='float32'),
+                     where=b != 0)
+
+
+def confision_to_pre_recall_f1(confusion_matrix):
+    ''' row is true, column is predicted
+    '''
+    diagonal = np.diagonal(confusion_matrix).flatten()
+    col_sum = np.sum(confusion_matrix, axis=0).flatten()
+    row_sum = np.sum(confusion_matrix, axis=1).flatten()
+
+    p = _divide(diagonal, col_sum)
+    r = _divide(diagonal, row_sum)
+    f1 = _divide(2 * p * r, p + r)
+    return p, r, f1
+
+
+class AUCMeter():
+    """
+    The AUCMeter measures the area under the receiver-operating characteristic
+    (ROC) curve for binary classification problems. The area under the curve (AUC)
+    can be interpreted as the probability that, given a randomly selected positive
+    example and a randomly selected negative example, the positive example is
+    assigned a higher score by the classification model than the negative example.
+    The AUCMeter is designed to operate on one-dimensional Tensors `output`
+    and `target`, where (1) the `output` contains model output scores that ought to
+    be higher when the model is more convinced that the example should be positively
+    labeled, and smaller when the model believes the example should be negatively
+    labeled (for instance, the output of a signoid function); and (2) the `target`
+    contains only values 0 (for negative examples) and 1 (for positive examples).
+    """
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.scores = torch.DoubleTensor(torch.DoubleStorage()).numpy()
+        self.targets = torch.LongTensor(torch.LongStorage()).numpy()
+
+    def update(self, output, target):
+        if torch.is_tensor(output):
+            # make sure no grad in output and target
+            output = output.cpu().data.squeeze().numpy()
+        if torch.is_tensor(target):
+            target = target.cpu().data.squeeze().numpy()
+        elif isinstance(target, numbers.Number):
+            target = np.asarray([target])
+        assert np.ndim(output) == 1, \
+            'wrong output size (1D expected)'
+        assert np.ndim(target) == 1, \
+            'wrong target size (1D expected)'
+        assert output.shape[0] == target.shape[0], \
+            'number of outputs and targets does not match'
+        assert np.all(np.add(np.equal(target, 1), np.equal(target, 0))), \
+            'targets should be binary (0, 1)'
+
+        self.scores = np.append(self.scores, output)
+        self.targets = np.append(self.targets, target)
+
+    def value(self):
+        # case when number of elements added are 0
+        if self.scores.shape[0] == 0:
+            return (0.5, 0.0, 0.0)
+
+        # sorting the arrays
+        scores, sortind = torch.sort(torch.from_numpy(self.scores),
+                                     dim=0,
+                                     descending=True)
+        scores = scores.numpy()
+        sortind = sortind.numpy()
+
+        # creating the roc curve
+        tpr = np.zeros(shape=(scores.size + 1), dtype=np.float64)
+        fpr = np.zeros(shape=(scores.size + 1), dtype=np.float64)
+
+        for i in range(1, scores.size + 1):
+            if self.targets[sortind[i - 1]] == 1:
+                tpr[i] = tpr[i - 1] + 1
+                fpr[i] = fpr[i - 1]
+            else:
+                tpr[i] = tpr[i - 1]
+                fpr[i] = fpr[i - 1] + 1
+
+        tpr /= (self.targets.sum() * 1.0)
+        fpr /= ((self.targets - 1.0).sum() * -1.0)
+
+        # calculating area under curve using trapezoidal rule
+        n = tpr.shape[0]
+        h = fpr[1:n] - fpr[0:n - 1]
+        sum_h = np.zeros(fpr.shape)
+        sum_h[0:n - 1] = h
+        sum_h[1:n] += h
+        area = (sum_h * tpr).sum() / 2.0
+
+        return (area, tpr, fpr)
 
 
 class AverageMeter(object):
