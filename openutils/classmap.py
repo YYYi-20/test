@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: Yuni
 LastEditors: XRZHANG
-LastEditTime: 2020-12-09 18:35:23
+LastEditTime: 2020-12-27 16:19:09
 '''
 
 import os
@@ -83,14 +83,7 @@ def get_submap(center, size, array):
 
 
 class ClassmapStatistic(object):
-    def __init__(self,
-                 cls_map,
-                 labels,
-                 names,
-                 tumor_label,
-                 colors=None,
-                 show=False,
-                 seed=0):
+    def __init__(self, cls_map, tumor_label, show=False, seed=0):
         """[summary]
 
         Args:
@@ -106,20 +99,12 @@ class ClassmapStatistic(object):
 
         self.h = self.cls_map.shape[0]
         self.w = self.cls_map.shape[1]
-        assert len(self.labels) == len(self.names) and len(self.labels) == len(
-            self.colors)
         self.seed = np.random.seed(seed)
         self.show = show
         self.tumor_label = tumor_label
         self.tumor_exist = np.any(self.cls_map == self.tumor_label)
 
-    def save_img(self,
-                 labels,
-                 names,
-                 colors=None,
-                 save_path=None,
-                 split=True,
-                 resolution=20):
+    def save_img(self, colors=None, save_path=None, resolution=20):
         """plot or save the class_map into image files name.jpeg.
 
         Args:
@@ -129,18 +114,11 @@ class ClassmapStatistic(object):
             show (bool, optional): [description]. Defaults to False. if True, preview the img.
             font_szie (float, optional): font_szie of bar
         """
-        if colors is None:
-            assert names is not None
-            colors = [colormap[i] for i in names]
-
-        l = np.unique(self.cls_map)
-        colors = [self.colors[i - 1] for i in l if i != 0]
-
         all_color = color.label2rgb(self.cls_map,
                                     colors=colors,
                                     bg_label=0,
                                     bg_color=(255, 255, 255)).astype('uint8')
-        if split:  # split  not pass test
+        if False:  # setif  to False, as we have not test it
             if save_path is not None:
                 os.makedirs(save_path, exist_ok=True)
                 for i, label_ in enumerate(labels):

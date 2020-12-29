@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-02 16:33:28
+LastEditTime: 2020-12-29 20:40:40
 '''
 
 import numpy as np
@@ -20,6 +20,13 @@ def pil_to_np(pil_img):
 def np_to_pil(np_img):
     from torchvision.transforms.functional import to_pil_image
     return to_pil_image(np_img)
+
+
+def normal_to_uint8(array):
+    img = np.asarray(array, dtype='float32')
+    img = (img - img.min()) / (img.max() - img.min())
+    img = (img * 255).astype('uint8')
+    return img
 
 
 def pltshow(img):
