@@ -23,13 +23,26 @@ class AnnotationTranformer():
         allobjects = load_json(json_name)
         names = []
         coords = []
-        tmp = {"name": "unknown", "colorRGB": -3670016}
         for obj in allobjects:
             class_name = obj.get('properties',
                                  {}).get('classification',
                                          {}).get('name', 'unknown')
             names.append(class_name)
-            coords.append(obj['geometry']['coordinates'][0])
+            coordinates = obj['geometry']['coordinates']
+
+            new_list = []
+
+            def split(li):
+                for ele in li:
+                    if isinstance(ele[0], list):
+                        split(ele)
+                    else:
+                        new_list.append(ele)
+
+            split(coordinates)
+            coordinates = np.asarray(new_list)
+            assert (len(coordinates.shape) == 2 and coordinates.shape[1] == 2)
+            coords.append(coordinates)
         return names, coords
 
     def export_qu(self, names, coords, out_json, color_dict=None):
@@ -100,23 +113,27 @@ class AnnotationTranformer():
                     'coordinates': []
                 },
                 'properties': {
+                    'name': "Unknown",
+                    'color': [51, 102, 51],
                     'classification': {
-                        'name': 'nan'
+                        'name': 'noname',
+                        "colorRGB": -13408717
                     }
                 }
             }
             name = anno.get('name')
-            name = name[-5:]
+            anno_id, class_name = name.split(' ')[-1], name[-5:]
             points = [(int(p.get('x')) - offset_x, int(p.get('y')) - offset_y)
                       for p in anno.findall('p')]
             if len(points) == 3:
                 logging.info(str(outjson) + 'only 3 poitns')
-                logging.info(str(anno))
+                # logging.info(str(anno))
                 continue
             if points[0] != points[-1]:
                 logging.info(str(anno) + 'start end mismatch')
             tmp['geometry']['coordinates'].append(points)
-            tmp['properties']['classification']['name'] = name
+            tmp['properties']['name'] = anno_id
+            tmp['properties']['classification']['name'] = class_name
             if color_dict is not None:
                 tmp['properties']['classification']['colorRGB'] = color_dict[
                     name]

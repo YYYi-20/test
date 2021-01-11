@@ -258,7 +258,6 @@ class ConfusionMeter():
         index = columns + ['pre', 'recall', 'f1']
         value = np.vstack([value, self.p, self.r, self.f1])
         result = pd.DataFrame(data=value, index=index, columns=columns)
-        print(result)
         return '\n' + str(result)
 
 

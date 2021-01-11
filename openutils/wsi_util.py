@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: XRZHANG
-LastEditTime: 2020-12-23 23:32:19
+LastEditTime: 2021-01-09 19:28:29
 '''
 '''
 This is a Dataset generator for slide images.
@@ -375,5 +375,5 @@ class TrainZoomGenerator():
                         normalize_staining(
                             pil_to_np(tile),
                             Path(out_dir) / f'l{label}_w{w}_h{h}.jpeg')
-                    except Exception as e:
-                        logging.info('{e}\t color normalize error')
+                    except:
+                        pass

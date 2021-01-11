@@ -285,7 +285,7 @@ class slide_window():
             result = np.asarray(result)
             return result
         else:
-            for l, r in zip(end_index, start_index):
+            for l, r in zip(start_index, end_index):
                 item = fun(data[l:r])
                 result.append(item)
             return np.asarray(result)
