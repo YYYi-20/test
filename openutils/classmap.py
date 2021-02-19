@@ -2,8 +2,8 @@
 Descripttion: python project
 version: 0.1
 Author: Yuni
-LastEditors: XRZHANG
-LastEditTime: 2020-12-27 16:19:09
+LastEditors: ZHANG XIANRUI
+LastEditTime: 2021-02-09 16:10:47
 '''
 
 import os
@@ -21,14 +21,15 @@ from .image_utli import colormap_dec as colormap
 
 
 def _count(labels, array):
-    """分别计算每个label在整个array中的数量 if not exist, counts=0
+    """分别计算每个label在整个array中的数量,label长度可以为1，也可以是int,float
+    if not exist, return counts=0
 
     Args:
-        labels ([type]): [description]
-        array ([type]): [description]
+        labels (int, float): list or ndarray with only one element is also properly.
+        array (ndarray): [description]
 
     Returns:
-        ndarray: [description]
+        ndarray, int: the length is same as labels.
     """
     array = array.flatten().tolist()
     if isinstance(labels, int):
@@ -44,6 +45,18 @@ def _count(labels, array):
 
 
 def group_count(array, thres=-20):
+    """calculate the number of far, inside, around pixels in the array according to thres.
+    < thres, far
+    > 0, inside pixels.
+    [thres,0] around
+
+    Args:
+        array ([type]): [description]
+        thres (int, optional): [description]. Defaults to -20.
+
+    Returns:
+        [type]: [description]
+    """
     if len(array) == 0:
         return [-1, -1, -1]
     else:

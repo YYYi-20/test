@@ -29,7 +29,7 @@ def normal_to_uint8(array):
     return img
 
 
-def pltshow(img):
+def pltshow(img, *args, **kargs):
     """[summary]
 
     Args:
@@ -44,18 +44,18 @@ def pltshow(img):
         img = img.cpu().data.numpy()
     if isinstance(img, np.ndarray):
         if len(img.shape) == 2:
-            plt.imshow(img)
+            plt.imshow(img, *args, **kargs)
         elif len(img.shape) == 3:
             if img.shape[2] == 3:
-                plt.imshow(img)
+                plt.imshow(img, *args, **kargs)
             elif img.shape[0] == 3:
-                plt.imshow(img.transpose(1, 2, 0))
+                plt.imshow(img.transpose(1, 2, 0), *args, **kargs)
             else:
                 raise ValueError('showing error, array dim is wrong')
         else:
             raise ValueError('showing error, array dim is wrong')
     else:
-        plt.imshow(pil_to_np(img))
+        plt.imshow(pil_to_np(img), *args, **kargs)
 
 
 def preds_to_classmap(pred_w_h, padding=1):
