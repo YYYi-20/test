@@ -117,11 +117,15 @@ class ClassmapStatistic(object):
         self.tumor_label = tumor_label
         self.tumor_exist = np.any(self.cls_map == self.tumor_label)
 
-    def save_img(self, colors=None, save_path=None, resolution=20):
+    def save_img(self,
+                 colors=None,
+                 save_dir=None,
+                 save_name='0_ALL.jpeg',
+                 resolution=20):
         """plot or save the class_map into image files name.jpeg.
 
         Args:
-            save_path (str, optional): The dir (it's dirname not filename) to save images. Defaults to None.
+            save_dir (str, optional): The dir (it's dirname not filename) to save images. Defaults to None.
             resolution (int, optional): Defaults to 50. if the class map is too small, use this to expand the size of the map.
             split (bool, optional): [description]. Defaults to True. if True, we save each class into one iamges additionally.
             show (bool, optional): [description]. Defaults to False. if True, preview the img.
@@ -132,22 +136,23 @@ class ClassmapStatistic(object):
                                     bg_label=0,
                                     bg_color=(255, 255, 255)).astype('uint8')
         if False:  # setif  to False, as we have not test it
-            if save_path is not None:
-                os.makedirs(save_path, exist_ok=True)
+            if save_dir is not None:
+                os.makedirs(save_dir, exist_ok=True)
                 for i, label_ in enumerate(labels):
                     X, Y = np.where(self.cls_map != label_)
                     one_color = all_color.copy()
                     one_color[X, Y] = [255, 255, 255]
                     one_color = img_zoom(one_color, resolution)
-                    imsave(Path(save_path, f'{self.names[i]}.jpeg'), one_color)
+                    imsave(Path(save_dir, f'{self.names[i]}.jpeg'), one_color)
 
         all_color = img_zoom(all_color, resolution)
         if self.show:
             pltshow(all_color)
-        if save_path is not None:
-            os.makedirs(save_path, exist_ok=True)
-            imsave(Path(save_path, '0_ALL.jpeg'), all_color)
-            logging.info(f'save in {save_path}')
+        if save_dir is not None:
+            save_dir = Path(save_dir)
+            save_dir.mkdir(parents=True, exist_ok=True)
+            imsave(save_dir / save_name, all_color)
+            logging.info(f'save in {save_dir}')
 
     def proportion(self,
                    tumor_label=7,
