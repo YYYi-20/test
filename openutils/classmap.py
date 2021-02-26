@@ -117,15 +117,11 @@ class ClassmapStatistic(object):
         self.tumor_label = tumor_label
         self.tumor_exist = np.any(self.cls_map == self.tumor_label)
 
-    def save_img(self,
-                 colors=None,
-                 save_dir=None,
-                 save_name='0_ALL.jpeg',
-                 resolution=20):
+    def save_img(self, colors=None, save_path=None, resolution=20):
         """plot or save the class_map into image files name.jpeg.
 
         Args:
-            save_dir (str, optional): The dir (it's dirname not filename) to save images. Defaults to None.
+            save_path (str, optional): The dir (it's dirname not filename) to save images. Defaults to None.
             resolution (int, optional): Defaults to 50. if the class map is too small, use this to expand the size of the map.
             split (bool, optional): [description]. Defaults to True. if True, we save each class into one iamges additionally.
             show (bool, optional): [description]. Defaults to False. if True, preview the img.
@@ -148,11 +144,11 @@ class ClassmapStatistic(object):
         all_color = img_zoom(all_color, resolution)
         if self.show:
             pltshow(all_color)
-        if save_dir is not None:
-            save_dir = Path(save_dir)
-            save_dir.mkdir(parents=True, exist_ok=True)
-            imsave(save_dir / save_name, all_color)
-            logging.info(f'save in {save_dir}')
+        if save_path is not None:
+            save_path = Path(save_path)
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            imsave(save_path, all_color)
+            logging.info(f'save in {save_path}')
 
     def proportion(self,
                    tumor_label=7,

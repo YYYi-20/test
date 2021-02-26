@@ -106,7 +106,7 @@ class WsiDataSet(Dataset):
     def save_properties(self, json_file):
         return dump_json(self._properties, json_file)
 
-    def save_tiles(self, out_dir, bw_thres=230, bw_ratio=0.5):
+    def save_tiles(self, out_dir, bw_thres, bw_ratio):
         self.bw_thres = bw_thres
         self.bw_ratio = bw_ratio
         Path(out_dir).mkdir(parents=True, exist_ok=True)

@@ -1,12 +1,11 @@
 import argparse
-import logging
 import numpy as np
 from PIL import Image
 
 
 def normalize_staining(img,
                        savePath=None,
-                       Io=255,
+                       Io=240,
                        alpha=1,
                        beta=0.15):  # previous Io 240
     ''' Normalize staining appearence of H&E stained images

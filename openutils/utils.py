@@ -12,6 +12,7 @@ from pathlib import Path
 from operator import itemgetter
 import shutil
 from functools import wraps
+import pickle
 
 
 @wraps(json.load)
@@ -20,7 +21,7 @@ def load_json(filenmae, **kwargs):
         with open(filenmae, 'r') as f:
             return json.load(f, **kwargs)
     except Exception as e:
-        logging.error(e)
+        logging.exception(e)
 
 
 @wraps(json.dump)
@@ -29,7 +30,25 @@ def dump_json(dict, filename, **kwargs):
         with open(filename, 'w') as f:
             json.dump(dict, f, **kwargs)
     except Exception as e:
-        logging.error(e)
+        logging.exception(e)
+
+
+@wraps(pickle.load)
+def load_pickle(filenmae, **kwargs):
+    try:
+        with open(filenmae, 'rb') as f:
+            return pickle.load(f, **kwargs)
+    except Exception as e:
+        logging.exception(e)
+
+
+@wraps(pickle.dump)
+def dump_pickle(data, filename, **kwargs):
+    try:
+        with open(filename, 'wb') as f:
+            pickle.dump(data, f, **kwargs)
+    except Exception as e:
+        logging.exception(e)
 
 
 def get_values(dic, keys):
