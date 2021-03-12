@@ -64,7 +64,7 @@ def is_empty(path):
 
 def reset_dir(path, clear_dir):
     '''
-    如果文件夹不存在就创建，如果文件存在就清空！
+    如果文件夹不存在就创建，如果文件存在是否清空！
     :param filepath:需要创建的文件夹路径
     :return:
     '''
@@ -75,4 +75,4 @@ def reset_dir(path, clear_dir):
         else:
             return
     else:
-        Path(path).mkdir()
+        Path(path).mkdir(parents=True)
