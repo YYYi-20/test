@@ -2,8 +2,8 @@
 Descripttion: python project
 version: 0.1
 Author: XRZHANG
-LastEditors: XRZHANG
-LastEditTime: 2020-12-29 20:40:40
+LastEditors: Please set LastEditors
+LastEditTime: 2021-03-12 21:12:53
 '''
 
 import numpy as np
@@ -27,6 +27,49 @@ def normal_to_uint8(array):
     img = (img - img.min()) / (img.max() - img.min())
     img = (img * 255).astype('uint8')
     return img
+
+
+def split_by_strides_4D(X, kh, kw, s):
+    """分割成滑动窗,与卷积中的滑动相同
+
+    Args:
+        X ([type]): [description]
+        kh ([type]): kernel size in x axis.
+        kw ([type]): kernel size in y axis.
+        s ([type]): stride of x and y axis.
+
+    Returns:
+        [type]: [description]
+    """
+    N, H, W, C = X.shape
+    oh = (H - kh) // s + 1
+    ow = (W - kw) // s + 1
+    shape = (N, oh, ow, kh, kw, C)
+    strides = (X.strides[0], X.strides[1] * s, X.strides[2] * s,
+               *X.strides[1:])
+    A = np.lib.stride_tricks.as_strided(X, shape=shape, strides=strides)
+    return A
+
+
+def split_by_strides_2D(X, kh, kw, s):
+    """分割成滑动窗,与卷积中的滑动相同
+
+    Args:
+        X ([type]): [description]
+        kh ([type]): kernel size in x axis.
+        kw ([type]): kernel size in y axis.
+        s ([type]): stride of x and y axis.
+
+    Returns:
+        [type]: [description]
+    """
+    H, W = X.shape
+    oh = (H - kh) // s + 1
+    ow = (W - kw) // s + 1
+    shape = (oh, ow, kh, kw)
+    strides = (X.strides[0] * s, X.strides[1] * s, *X.strides)
+    A = np.lib.stride_tricks.as_strided(X, shape=shape, strides=strides)
+    return A
 
 
 def pltshow(img, *args, **kargs):

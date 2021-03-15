@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: Yuni
 LastEditors: Please set LastEditors
-LastEditTime: 2021-03-12 21:03:10
+LastEditTime: 2021-03-15 15:33:39
 '''
 """
 凡是自己写的函数默认数组维度为 `纵轴x横轴`，注意与一些opencv库函数区分
@@ -20,25 +20,11 @@ from pathlib import Path
 from .image_utli import *
 
 
-def split_by_strides_4D(X, kh, kw, s):
-    N, H, W, C = X.shape
-    oh = (H - kh) // s + 1
-    ow = (W - kw) // s + 1
-    shape = (N, oh, ow, kh, kw, C)
-    strides = (X.strides[0], X.strides[1] * s, X.strides[2] * s,
-               *X.strides[1:])
-    A = np.lib.stride_tricks.as_strided(X, shape=shape, strides=strides)
-    return A
-
-
-def split_by_strides_2D(X, kh, kw, s):
-    H, W = X.shape
-    oh = (H - kh) // s + 1
-    ow = (W - kw) // s + 1
-    shape = (oh, ow, kh, kw)
-    strides = (X.strides[0] * s, X.strides[1] * s, *X.strides)
-    A = np.lib.stride_tricks.as_strided(X, shape=shape, strides=strides)
-    return A
+def entropy(array):
+    # 计算概率分布==========计算熵=========
+    probs = array / array.sum()
+    s = stats.entropy(probs, base=2)
+    return s
 
 
 def _count(labels, array):
@@ -87,7 +73,11 @@ def count_by_thres(array, thres=-20):
         return [far, around, inside]
 
 
-def _ratios(top, down, array):
+def percentile_score(array, percent=90):
+    return np.percentile(array, percent, axis=0)
+
+
+def ratios(top, down, array):
     """top = [1,2,3], down = [1,3,5],计算数组中 1,2,3 占sum[1,3,5]的比例
     分别计算top中每个label的数量，与占down的总和相除
 
@@ -185,6 +175,115 @@ class ClassmapStatistic(object):
             imsave(save_path, all_color)
             logging.info(f'save in {save_path}')
 
+    def proportion(self,
+                   tumor_label=7,
+                   first_label=range(1, 8),
+                   first_kernel_size=(10, 10),
+                   first_stride=2,
+                   second_label=[2, 4],
+                   second_kernel_size=(3, 3),
+                   second_stride=2,
+                   threshold=(0.3, 0.95)):
+        """ 每一个肿瘤点为中心，选择submap,计算interset_label 中每个label占所有
+        interest label的比例一阶公式为(number of each first_label) / (number of all first_label); 背景的label为0.  返回list结果可以再输入score函数，计算90%分位数。                                                                   
+        Args:
+            tumor_label (int, optional): [description]. Defaults to 7.
+            first_label ([type], optional): The label that we interested. Defaults to range(1, 8).
+            first_kernel_size (tuple, optional): The size of sub_classmap in 1st order. Defaults to (10, 10).
+            second_label (list, optional): the label we want to observed in sub_sub_classmap. Defaults to [2, 4].
+            second_kernel_size (tuple, optional): The size of sub_classmap in 1st order. Defaults to (10, 10).
+            threshold: [].
+
+        Returns:
+            tuple: [description]
+        """
+        if not self.tumor_exist:
+            first, second = None, None
+        splited_maps = split_by_strides_2D(self.cls_map, *first_kernel_size,
+                                           first_stride).reshape(
+                                               -1, *first_kernel_size)
+        first = []
+        second = []
+        for submap in splited_maps:
+            # 非背景 tiles 个数
+            non_back_num = submap.size - _count(0, submap)
+            # the number of each interest label in submap
+            first_counts = _count(first_label, submap)
+            # the number of tumor tiles in submap
+            tumor_counts = _count(tumor_label, submap)
+            #当该sub_mp的肿瘤tile个数满足一定比例在进行后续计算
+            if (non_back_num !=
+                    0) and (tumor_counts / non_back_num >= threshold[0]) and (
+                        tumor_counts / non_back_num <= threshold[1]):
+                # make sure the proporation of tumor  in submap is in threshold
+                # if tumor counts in threshold, add result to list
+                # add (counts,proporation) to list
+                first.append((first_counts, first_counts / sum(first_counts)))
+                second_splited_maps = split_by_strides_2D(
+                    submap, *second_kernel_size,
+                    second_stride).reshape(-1, *second_kernel_size)
+                # 在一个submap中累加
+                second_counts = np.zeros(len(second_label))  # 初始为0
+                for s_submap in second_splited_maps:
+                    second_counts += _count(second_label, s_submap)
+                second.append(
+                    (second_counts, second_counts / sum(first_counts)))
+        first, second = np.asarray(first), np.asarray(second)
+        return first, second
+
+    def tumor_mask_preprocess(self, tumor_label, disk, small_object):
+        '''腐蚀膨胀，选取合适参数
+        '''
+        self.tumor_mask = np.where(self.cls_map == tumor_label, 255,
+                                   0).astype('uint8')
+        if self.show:
+            logging.info('before process')
+            pltshow(self.tumor_mask)
+        kernel = morphology.disk(disk)
+        tumor_mask = cv2.morphologyEx(self.tumor_mask, cv2.MORPH_CLOSE, kernel)
+        # tumor_mask =morphology.closing(tumor_mask, selem=None, out=None)
+        # tumor_mask=morphology.remove_small_holes(tumor_mask, 1000)
+        tumor_mask = ndimage.binary_fill_holes(tumor_mask)
+        tumor_mask = morphology.remove_small_objects(tumor_mask, small_object)
+        tumor_mask_ = tumor_mask.astype(np.uint8) * 255
+        if self.show:
+            logging.info('after process')
+            pltshow(tumor_mask_)
+        return tumor_mask_
+
+    def calc_distance(self, tumor_mask, thres, first_label, tumor_label):
+        '''far, around, inside
+        '''
+        # 寻找肿瘤区域，并计算感兴趣的label到肿瘤区域的距离分布
+        contours, _ = cv2.findContours(tumor_mask, cv2.RETR_TREE,
+                                       cv2.CHAIN_APPROX_SIMPLE)
+
+        if not self.tumor_exist or len(contours) == 0:
+            distance, distance_ratio = None, None
+        else:
+            distance = [[] for _ in range(len(first_label))]
+            for i in range(self.h):
+                for j in range(self.w):
+                    c = self.cls_map[i, j]
+                    if c in first_label:
+                        tmp = max([
+                            cv2.pointPolygonTest(cnt, (i, j), True)
+                            for cnt in contours
+                        ])
+                        # 遍历所有轮廓，temp记录最近的轮廓。当点在轮廓外时返回负值，当点在内部时返回正值,如果点在轮廓上则返回零.
+                        idx = first_label.index(c)
+                        distance[idx].append(tmp)
+            for i, dis in enumerate(distance):
+                tmp = count_by_thres(np.asarray(dis), thres)
+                distance[i] = tmp
+
+            num_tumor = _count(tumor_label, self.cls_map)
+            distance = np.asarray(distance)
+            distance_ratio = distance / num_tumor
+        return distance, distance_ratio
+
+
+'''
     def _proportion(self,
                     tumor_label=7,
                     first_label=range(1, 8),
@@ -231,6 +330,8 @@ class ClassmapStatistic(object):
             tumor_counts = _count(tumor_label, submap)
 
             #当该sub_mp的肿瘤tile个数满足一定比例在进行后续计算
+            if non_back_num == 0:
+                continue
             if not (tumor_counts / non_back_num >= threshold[0]
                     and tumor_counts / non_back_num < threshold[1]):
                 continue
@@ -252,128 +353,4 @@ class ClassmapStatistic(object):
             second.append(
                 (second_counts, second_counts / sum_interest_counts))  # 为什么除
         return np.asarray(first), np.asarray(second)
-
-    def proportion(self,
-                   tumor_label=7,
-                   first_label=range(1, 8),
-                   first_kernel_size=(10, 10),
-                   first_stride=2,
-                   second_label=[2, 4],
-                   second_kernel_size=(3, 3),
-                   second_stride=2,
-                   sample_fraction=1,
-                   threshold=(0.3, 0.95)):
-        """ 每一个肿瘤点为中心，选择submap,计算interset_label 中每个label占所有
-        interest label的比例一阶公式为(number of each first_label) / (number of all first_label); 背景的label为0.  返回list结果可以再输入score函数，计算90%分位数。                                                                   
-        Args:
-            tumor_label (int, optional): [description]. Defaults to 7.
-            first_label ([type], optional): The label that we interested used for 1st order. Defaults to range(1, 8).
-            first_kernel_size (tuple, optional): The size of sub_classmap in 1st order. Defaults to (10, 10).
-            second_label (list, optional): the label we want to observed in sub_sub_classmap. Defaults to [2, 4].
-            second_kernel_size (tuple, optional): The size of sub_classmap in 1st order. Defaults to (10, 10).
-            sample_fraction (int, optional): n不需要以每个肿瘤tile为中心计算，可以随机选取一定比例的tumor tiles. Defaults to 1.
-            threshold: [].
-
-        Returns:
-            tuple: [description]
-        """
-        splited_maps = split_by_strides_2D(self.cls_map, *first_kernel_size,
-                                           first_stride).reshape(
-                                               -1, *first_kernel_size)
-        first = []
-        second = []
-        for submap in splited_maps:
-            # 非背景 tiles 个数
-            non_back_num = submap.size - _count(0, submap)
-            # the number of each interest label in submap
-            first_counts = _count(first_label, submap)
-            # the number of tumor tiles in submap
-            tumor_counts = _count(tumor_label, submap)
-            #当该sub_mp的肿瘤tile个数满足一定比例在进行后续计算
-            if (tumor_counts / non_back_num >= threshold[0]
-                    and tumor_counts / non_back_num < threshold[1]):
-                # make sure the proporation of tumor  in submap is in threshold
-                # if tumor counts in threshold, add result to list
-                # add (counts,proporation) to list
-                first.append((first_counts, first_counts / sum(first_counts)))
-                second_splited_maps = split_by_strides_2D(
-                    submap, *second_kernel_size,
-                    second_stride).reshape(-1, *second_kernel_size)
-                # 在一个submap中累加
-                second_counts = np.zeros(len(second_label))  # 初始为0
-                for s_submap in second_splited_maps:
-                    second_counts += _count(second_label, s_submap)
-                second.append(
-                    (second_counts, second_counts / sum(first_counts)))
-        return np.asarray(first), np.asarray(second)
-
-    def score(self, array, percent=90):
-        if len(array) == 0:
-            return (-1, -1), [-1] * len(self.names)
-        score = np.percentile(array, percent, axis=0)
-        return array.shape, score
-
-    def entropy(self, array):
-        # 计算概率分布==========计算熵=========
-        probs = array / array.sum()
-        s = stats.entropy(probs, base=2)
-        return s
-
-    def tumor_mask_preprocess(self, tumor_label, disk, small_object):
-        '''腐蚀膨胀，选取合适参数
-        '''
-        self.tumor_mask = np.where(self.cls_map == tumor_label, 255,
-                                   0).astype('uint8')
-        if self.show:
-            pltshow(self.tumor_mask)
-        kernel = morphology.disk(disk)
-        tumor_mask = cv2.morphologyEx(self.tumor_mask, cv2.MORPH_CLOSE, kernel)
-        # tumor_mask =morphology.closing(tumor_mask, selem=None, out=None)
-        # tumor_mask=morphology.remove_small_holes(tumor_mask, 1000)
-        tumor_mask = ndimage.binary_fill_holes(tumor_mask)
-        tumor_mask = morphology.remove_small_objects(tumor_mask, small_object)
-        tumor_mask_ = tumor_mask.astype(np.uint8) * 255
-        if self.show:
-            pltshow(tumor_mask_)
-        return tumor_mask_
-
-    def calc_distance(self,
-                      tumor_mask,
-                      thres,
-                      first_label,
-                      tumor_label,
-                      ratio=False):
-        '''far, around, inside
-        '''
-        # 寻找肿瘤区域，并计算感兴趣的label到肿瘤区域的距离分布
-        contours, _ = cv2.findContours(tumor_mask, cv2.RETR_TREE,
-                                       cv2.CHAIN_APPROX_SIMPLE)
-
-        if len(contours) > 0:
-            distance = [[] for _ in range(len(first_label))]
-            for i in range(self.h):
-                for j in range(self.w):
-                    c = self.cls_map[i, j]
-                    if c in first_label:
-                        tmp = max([
-                            cv2.pointPolygonTest(cnt, (i, j), True)
-                            for cnt in contours
-                        ])
-                        # 遍历所有轮廓，temp记录最近的轮廓。当点在轮廓外时返回负值，当点在内部时返回正值,如果点在轮廓上则返回零.
-                        idx = first_label.index(c)
-                        distance[idx].append(tmp)
-            for i, dis in enumerate(distance):
-                tmp = count_by_thres(np.asarray(dis), thres)
-                distance[i] = tmp
-            self.distance = np.asarray(distance)
-
-            if ratio is True:
-                num_tumor = _count(tumor_label, self.cls_map)
-                self.distance_ratio = self.distance / num_tumor
-
-        else:
-            self.distance = np.zeros((len(self.names), 3)) - 1
-            self.distance_ratio = np.zeros((len(self.names), 3)) - 1
-
-    def ratios(self, top, down):
-        return _ratios(top, down, self.cls_map)
+'''
