@@ -2,8 +2,8 @@
 Descripttion: python project
 version: 0.1
 Author: XRZHANG
-LastEditors: ZHANG XIANRUI
-LastEditTime: 2021-03-15 18:49:37
+LastEditors: Please set LastEditors
+LastEditTime: 2021-03-17 11:48:09
 '''
 
 from openutils import *
@@ -17,25 +17,22 @@ def main(filepath):
     statistic = ClassmapStatistic(classmap_array, tumor_label, show=True)
     statistic.save_img(colors=colors)
 
-    count_ratio_1st, count_ratio_2nd = statistic.proportion(
-        tumor_label,
-        first_label=[1, 2, 3],
-        first_kernel_size=(10, 10),
-        first_stride=2,
-        second_label=[1, 2, 3],
-        second_kernel_size=(3, 3),
-        second_stride=2,
-        threshold=(0.3, 0.95))
+    rois = statistic.roi_count(interest_class=[1, 2, 3, 4],
+                               kernel_size=5,
+                               stride=5,
+                               threshold_non_back=(0.5, 1),
+                               threshold_other={4: (0.3, 1)})
 
     tumor_mask = statistic.tumor_mask_preprocess(tumor_label,
-                                                 disk=5,
-                                                 small_object=50)
-    distance, distance_rario_to_tumor = statistic.calc_distance(
-        tumor_mask,
-        thres=-20,
-        first_label=[0, 1, 2, 3],
-        tumor_label=tumor_label,
-    )  # 每个感兴趣的label的far around inside的tile个数 ，以及这些个数与肿瘤个数的比例
+                                                 disk=3,
+                                                 small_object=20)
+    # cls_map = statistic.cls_map
+    # map1 = np.where(cls_map == 4, 0, cls_map)
+    # new_cls_map = np.where(tumor_mask == 255, 4, map1)
+    distance = statistic.calc_distance(tumor_mask,
+                                       interest_class=[0, 1, 2, 3, 4])
+    # 每个感兴趣的label的far around inside的tile个数 ，以及这些个数与肿瘤个数的比例
+    return rois, distance
 
 
 if __name__ == '__main__':

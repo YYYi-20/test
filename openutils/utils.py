@@ -3,7 +3,7 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: ZHANG XIANRUI
-LastEditTime: 2021-02-20 17:18:21
+LastEditTime: 2021-03-16 17:36:20
 '''
 import logging
 import json
@@ -76,3 +76,16 @@ def reset_dir(path, clear_dir):
             return
     else:
         Path(path).mkdir(parents=True)
+
+
+class Interval(object):
+    def __init__(self, lower, upper):
+        self.lower = lower
+        self.upper = upper
+
+    def __contains__(self, item):
+        return self.lower <= item <= self.upper
+
+
+def interval(lower, upper):
+    return Interval(lower, upper)
