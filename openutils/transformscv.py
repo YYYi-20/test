@@ -2,8 +2,8 @@
 Descripttion: python project
 version: 0.1
 Author: XRZHANG
-LastEditors: XRZHANG
-LastEditTime: 2020-12-25 14:23:12
+LastEditors: ZHANG XIANRUI
+LastEditTime: 2021-04-01 16:56:20
 '''
 
 import cv2
@@ -51,8 +51,10 @@ class Resize():
         return img
 
 
-class RGBArrayToTensor():
+class CvToTensor():
     def __call__(self, img):
-        img = img.transpose((2, 0, 1))
-        tonsor = torch.from_numpy(img)
-        return tonsor
+        if len(img.shape) == 3:
+            img = img.transpose((2, 0, 1))
+        elif len(img.shape) == 2:
+            img = img[None, :, :]
+        return torch.from_numpy(img)

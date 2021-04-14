@@ -2,15 +2,14 @@
 Descripttion: python project
 version: 0.1
 Author: XRZHANG
-LastEditors: XRZHANG
-LastEditTime: 2021-01-09 19:28:29
+LastEditors: ZHANG XIANRUI
+LastEditTime: 2021-04-14 15:19:30
 '''
 '''
 This is a Dataset generator for slide images.
 '''
 import logging
 import math
-from pathlib import Path
 
 import cv2
 from collections import defaultdict
@@ -21,7 +20,7 @@ from torch.utils.data import Dataset
 
 from .image_utli import *
 from .normalize_staining import normalize_staining
-from .utils import dump_json
+from .utils import dump_json, Path
 
 
 def open_slide(filename, image=False):

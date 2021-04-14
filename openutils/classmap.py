@@ -2,14 +2,13 @@
 Descripttion: python project
 version: 0.1
 Author: Yuni
-LastEditors: Please set LastEditors
-LastEditTime: 2021-03-17 16:37:46
+LastEditors: ZHANG XIANRUI
+LastEditTime: 2021-04-14 15:17:20
 '''
 """
 凡是自己写的函数默认数组维度为 `纵轴x横轴`，注意与一些opencv库函数区分
 """
 
-from PIL.Image import new
 import cv2
 import logging
 import numpy as np
@@ -17,27 +16,21 @@ import pandas as pd
 from scipy import ndimage, stats
 from skimage import color, morphology
 from imageio import imsave
-from pathlib import Path
 
-from torch.utils import data
 from .utils import *
 from .image_utli import *
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-sns.set()
-import numpy as np
 
 
 class FeatureExtractor():
     def __init__(self):
         pass
 
-    def entropy(self, array, base=2):
+    def entropy(self, p, base=2):
         # ==========计算熵=========
-        p = array / array.sum()
-        s = stats.entropy(p, base=base)
-        return s
+        if p.sum() != 1:
+            p = p / p.sum()
+        self.s = stats.entropy(p, base=base)
+        return self.s
 
     def gmm(self, X, **kwargs):
         """Gaussian Mixture.
@@ -129,14 +122,14 @@ class FeatureExtractor():
             Number of iteration done before the next print.
         """
         from sklearn.mixture import GaussianMixture
-        self.gmm_model = GaussianMixture(kwargs).fit(X)
+        self.gmm_model = GaussianMixture(**kwargs).fit(X)
         labels = self.gmm_model.predict(X)
         return labels, self.gmm_model.means_, self.gmm_model.covariances_, self.gmm_model.weights_
 
     def percentile_score(self, array, percent=90):
         return np.percentile(array, percent, axis=0)
 
-    def distance_classification(array, thres=-20):
+    def distance_classification(self, array, thres=-20):
         """calculate the number of far, inside, around pixels in the array according to thres.
         < thres, far;  > 0, inside pixels;  [thres,0] around.
 
@@ -145,7 +138,7 @@ class FeatureExtractor():
             thres (int, optional): [description]. Defaults to -20.
 
         Returns:
-            [type]: [description]
+            [type]: inside, around, far.
         """
         far = np.sum(array < thres)
         inside = np.sum(array > 0)
@@ -229,6 +222,8 @@ class ClassmapStatistic(object):
         self.show = show
         self.tumor_label = tumor_label
         self.tumor_exist = np.any(self.cls_map == self.tumor_label)
+        if not self.tumor_exist:
+            logging.warning('no tumor in this slide.')
 
     def save_img(self, colors=None, save_path=None, resolution=20):
         """plot or save the class_map into image files name.jpeg.
@@ -270,14 +265,16 @@ class ClassmapStatistic(object):
             tuple: [description]
         """
         if not self.tumor_exist:
-            return []
+            return
         if isinstance(kernel_size, tuple):
             kh, kw = kernel_size[0], kernel_size[1]
         elif isinstance(kernel_size, int):
             kh, kw = kernel_size, kernel_size
         splited_maps = split_by_strides_2D(self.cls_map, kh, kw,
                                            stride).reshape(-1, kh, kw)
-        assert len(splited_maps) != 0
+        if len(splited_maps) == 0:
+            logging.warning('size of ROI is too large!')
+            return
         rois = []
 
         def fun_count(interest_class, submap):
@@ -295,24 +292,37 @@ class ClassmapStatistic(object):
             #先保证除数non_back_num不为0
             if non_back_num / total_num in interval(*threshold_non_back):
                 if np.all([
-                        _count(label, submap) /
-                        non_back_num in interval(*thres)
+                        _count(label, submap) / non_back_num
+                        in interval(*thres)
                         for label, thres in threshold_other.items()
                 ]):
                     rois.append(
                         np.hstack([total_num, non_back_num, interest_num]))
+        if len(rois) != 0:
+            rois = np.vstack(rois)
+            #在whole slide level 计算
+            #排在第一行
+            whole_count = np.hstack(fun_count(interest_class, self.cls_map))
 
-        rois = np.vstack(rois)
-        #在whole slide level 计算
-        #排在第一行
-        whole_count = np.hstack(fun_count(interest_class, self.cls_map))
-
-        index = ['whole_slide'] + [f'roi_{i}' for i in (range(len(rois)))]
-        columns = ['total', 'non_back'] + list(interest_class)
-        result = pd.DataFrame(data=np.vstack([whole_count, rois]),
-                              columns=columns,
-                              index=index)
-        return result
+            index = ['whole_slide'] + [f'roi_{i}' for i in (range(len(rois)))]
+            columns = ['total', 'non_back'] + list(interest_class)
+            result = pd.DataFrame(data=np.vstack([whole_count, rois]),
+                                  columns=columns,
+                                  index=index)
+            return result
+        else:
+            logging.warning(
+                'ROI threshold is too small/large. No proper ROI is selected, so we add nan'
+            )
+            #没有合适的ROI,只返回whole
+            whole_count = np.hstack(fun_count(interest_class, self.cls_map))
+            index = ['whole_slide', 'roi_1']
+            columns = ['total', 'non_back'] + list(interest_class)
+            rois = np.full([1, len(columns)], np.nan)
+            result = pd.DataFrame(data=np.vstack([whole_count, rois]),
+                                  columns=columns,
+                                  index=index)
+            return result
 
     def tumor_mask_preprocess(self, tumor_label, disk, small_object):
         '''腐蚀膨胀，选取合适参数
@@ -335,31 +345,47 @@ class ClassmapStatistic(object):
         return tumor_mask_
 
     def calc_distance(self, tumor_mask, interest_class, new_cls_map=None):
-        '''far, around, inside
-        '''
-        # 寻找肿瘤区域，并计算感兴趣的label到肿瘤区域的距离分布
+        """寻找肿瘤区域，并计算感兴趣的label到肿瘤区域的距离分布.
+
+        Args:
+            tumor_mask ([type]): [description]
+            interest_class ([type]): [description]
+            new_cls_map ([type], optional): [description]. Defaults to None.
+
+        Returns:
+            tuple: far, around, inside.
+        """
+        if not self.tumor_exist:
+            return
         if new_cls_map is None:
             new_cls_map = self.cls_map
         contours, _ = cv2.findContours(tumor_mask, cv2.RETR_TREE,
                                        cv2.CHAIN_APPROX_SIMPLE)
-
-        if not self.tumor_exist or len(contours) == 0:
-            return []
+        if len(contours) == 0:
+            logging.warning('no tumor contours were found.')
+            return
         else:
-            distance = pd.DataFrame()
+            all_distance = pd.DataFrame()
             for cls in interest_class:
                 idx_x, idx_y = np.where(new_cls_map == cls)
-                distance_i = []
                 if len(idx_x) != 0:
+                    distance_i = []  # 一维列表，存储一个cls下的所有tile的距离
                     for i, j in zip(idx_x, idx_y):
-                        distance_i.append(
-                            max([
-                                cv2.pointPolygonTest(cnt, (i, j), True)
-                                for cnt in contours
-                            ]))
-                distance = pd.concat(
-                    [distance, pd.DataFrame(distance_i)], axis=1)
-            distance.columns = interest_class
+                        #选择最近的距离添加到distance_i
+                        nearst = max([
+                            cv2.pointPolygonTest(cnt, (i, j), True)
+                            for cnt in contours
+                        ])
+                        distance_i.append(nearst)
+                else:  #如果找不到  添加 nan
+                    logging.info(
+                        f'class {cls} is not found in ROI,so we use nan')
+                    distance_i = [None]
+
+                # 把所有cls的距离按照每一列拼接起来
+                all_distance = pd.concat(
+                    [all_distance, pd.DataFrame(distance_i)], axis=1)
+            all_distance.columns = interest_class
             # distance = [[] for _ in range(len(first_label))]
             # for interest_label in first_label
             # for i in range(self.h):
@@ -381,7 +407,7 @@ class ClassmapStatistic(object):
             # distance = np.asarray(distance)
             # distance_ratio = distance / num_tumor
         # return distance, distance_ratio
-        return distance
+        return all_distance
 
 
 '''

@@ -3,16 +3,41 @@ Descripttion: python project
 version: 0.1
 Author: XRZHANG
 LastEditors: ZHANG XIANRUI
-LastEditTime: 2021-03-16 17:36:20
+LastEditTime: 2021-04-14 15:33:17
 '''
 import logging
 import json
 import os
-from pathlib import Path
+import pathlib
 from operator import itemgetter
 import shutil
 from functools import wraps
 import pickle
+
+
+class Path(type(pathlib.Path()), pathlib.Path):
+    """[summary]
+
+    Args:
+        type ([type]): [description]
+        pathlib ([type]): [description]
+    """
+    def lglob(self, pattern):
+        return list(super().glob(pattern))
+
+    def iglob(self, pattern):
+        return super().glob(pattern)
+
+    def sglob(self, pattern):
+        """[summary]
+
+        Args:
+            pattern ([type]): [description]
+
+        Returns:
+            [type]: [description]
+        """
+        return [str(i) for i in super().glob(pattern)]
 
 
 @wraps(json.load)
@@ -89,3 +114,11 @@ class Interval(object):
 
 def interval(lower, upper):
     return Interval(lower, upper)
+
+
+def yield_decorator(func):
+    def wrapper(*args, **kw):
+        f = func(*args, **kw)
+        return list(f)
+
+    return wrapper
